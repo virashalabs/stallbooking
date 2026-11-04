@@ -69,7 +69,7 @@ A hold that isn't paid in time expires on its own. If the vendor paid late but t
 
 The app is deployed the same way as studio.virashalabs.online:
 
-1. Push this repo to GitHub at `virashalabs/stallapp`, branch `main`.
+1. Push this repo to GitHub at `virashalabs/stallbooking`, branch `main`.
 2. In Render, choose **New → Blueprint**, pick the repo, and Render reads `render.yaml`. That creates a free web service called `stall-booking` in the Singapore region.
 3. In Render, open the service and go to **Settings → Custom Domains → Add**, then enter `stall.virashalabs.online`.
 4. In Namecheap, open virashalabs.online and go to **Advanced DNS**. Add a `CNAME` record with host `stall` and value `<service>.onrender.com`.
