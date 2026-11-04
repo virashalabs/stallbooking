@@ -78,7 +78,7 @@ Every push to `main` redeploys the site. Add `[skip render]` to a commit message
 
 **Free plan limits:**
 - The disk is wiped on every deploy or restart. The site then starts again from `seed/`, which holds the event, layout, poster, payment QR and settings, but **bookings made on the live site are lost**.
-- The site sleeps after 15 minutes with no visitors. `.github/workflows/keep-awake.yml` pings it to keep it awake.
+- The site sleeps after 15 minutes with no visitors. A cron-job.org job pings `https://stall.virashalabs.online/api/site` every 10 minutes to keep it awake.
 
 To keep real bookings, switch to the Starter plan with a persistent disk (see the comment in `render.yaml`).
 
