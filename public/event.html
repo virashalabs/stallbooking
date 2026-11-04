@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Book a Stall — Auto Expo Suburban Events</title>
+  <script>try{var t=localStorage.getItem('bms_theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+  <link rel="icon" type="image/png" href="/img/stall-icon.png">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main>
+    <section class="event-hero">
+      <div class="bg" id="hero-bg"></div>
+      <div class="container">
+        <span class="badge" id="ev-type"></span>
+        <h1 id="ev-title" style="margin-top:10px">Loading…</h1>
+        <div class="meta"><span id="ev-date"></span><span id="ev-venue"></span></div>
+      </div>
+    </section>
+
+    <div class="container">
+      <div class="layout-2col">
+        <div>
+          <ol class="steps" id="steps">
+            <li data-step="1"><span class="n">1</span>Your details</li>
+            <li data-step="2"><span class="n">2</span>Choose stall</li>
+            <li data-step="3"><span class="n">3</span>Pay &amp; confirm</li>
+          </ol>
+
+          <!-- Step 1: vendor details -->
+          <form class="card" id="details-form">
+            <h2>Tell us about your business</h2>
+            <p class="muted small" style="margin-top:0">The organizer uses these details to approve your stall.</p>
+            <div class="grid2">
+              <div class="field"><label for="business_name">Business name *</label><input id="business_name" name="business_name" type="text" required maxlength="120" autocomplete="organization"></div>
+              <div class="field"><label for="contact_name">Contact person *</label><input id="contact_name" name="contact_name" type="text" required maxlength="120" autocomplete="name"></div>
+              <div class="field"><label for="phone">WhatsApp number *</label><input id="phone" name="phone" type="tel" required placeholder="98765 43210" autocomplete="tel"><span class="hint">10-digit Indian number or with country code</span></div>
+              <div class="field"><label for="email">Email (optional)</label><input id="email" name="email" type="email" maxlength="160" autocomplete="email"></div>
+            </div>
+            <div class="field"><label for="products">Products you want to sell *</label><textarea id="products" name="products" required maxlength="500" placeholder="e.g. Handmade candles, diyas and festive gift hampers"></textarea></div>
+            <button class="btn primary" type="submit">Continue to stall selection →</button>
+          </form>
+
+          <!-- Step 2: stall map -->
+          <section class="card hidden" id="map-card">
+            <div class="row between" style="margin-bottom:8px">
+              <h2 style="margin:0">Choose your stall</h2>
+              <button class="btn ghost sm" type="button" id="edit-details">Edit details</button>
+            </div>
+            <div class="legend">
+              <span><i class="lg-available"></i>Available</span>
+              <span><i class="lg-selected"></i>Your selection</span>
+              <span><i class="lg-held"></i>Being booked</span>
+              <span><i class="lg-reserved"></i>Reserved (awaiting approval)</span>
+              <span><i class="lg-booked"></i>Booked</span>
+              <span><i class="lg-corner"></i>★ Corner stall (extra charge)</span>
+            </div>
+            <div class="map-scroll"><div class="stage" id="stage"></div></div>
+            <p class="muted small" style="margin:8px 0 0">Tap a green stall on the layout, or pick from the list below. Availability updates live.</p>
+            <div class="seat-list" id="seats"></div>
+          </section>
+          <section class="card" id="about" style="margin-top:20px">
+            <h2>About this event</h2>
+            <div class="about-grid" id="about-grid">
+              <a id="poster-link" class="hidden" target="_blank" rel="noopener"><img class="poster" id="poster" alt="Event poster"></a>
+              <p id="ev-desc" style="white-space:pre-line;margin:0"></p>
+            </div>
+          </section>
+        </div>
+
+        <aside class="side">
+          <div class="card" id="summary">
+            <h3>Booking summary</h3>
+            <div id="summary-body" class="muted small">Fill in your details, then select a stall on the layout.</div>
+            <button class="btn primary block hidden" id="reserve" style="margin-top:14px">Reserve &amp; pay</button>
+            <p class="muted small hidden" id="hold-note" style="margin:10px 0 0"></p>
+          </div>
+          <div class="card small" id="pricing"></div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <div class="sticky-bar" id="bar">
+    <div class="container">
+      <div><b id="bar-label"></b><div class="muted small" id="bar-sub"></div></div>
+      <button class="btn primary" id="bar-btn">Reserve &amp; pay</button>
+    </div>
+  </div>
+  <footer>© Auto Expo Suburban Events · Since 2009</footer>
+
+  <script type="module" src="/js/event.js"></script>
+</body>
+</html>

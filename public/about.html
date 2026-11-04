@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>About Us — Auto Expo Suburban Events</title>
+  <script>try{var t=localStorage.getItem('bms_theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+  <link rel="icon" type="image/png" href="/img/stall-icon.png">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main>
+    <section class="page-hero">
+      <div class="container">
+        <span class="since">SINCE 2009</span>
+        <h1>AUTO EXPO SUBURBAN EVENTS</h1>
+        <p>Chennai's Premier Corporate Event Planner — expertise in automotive events and corporate functions.</p>
+      </div>
+    </section>
+
+    <div class="container">
+      <section class="section">
+        <div class="about-split">
+          <div class="card">
+            <h2>Expertise in BTL Activities</h2>
+            <p id="about-text" style="margin:0"></p>
+            <ul class="ticks" id="points"></ul>
+            <p class="muted small" style="margin:16px 0 0">Also: <b>PRIME GEAR EVENTS</b></p>
+          </div>
+          <div class="card">
+            <h2>Our Event Planning Journey</h2>
+            <div class="statrow">
+              <div><b id="years"></b><span class="muted small">Years of events</span></div>
+              <div><b id="venue-count"></b><span class="muted small">Corporate venues</span></div>
+              <div><b id="patron-count"></b><span class="muted small">Brand patrons</span></div>
+            </div>
+            <p class="muted small" style="margin:14px 0 0">From automotive showcases and BTL activations to festive stall markets at leading IT parks and corporate campuses across Chennai.</p>
+            <a class="btn primary" href="/#events" style="margin-top:14px">Book a stall at our next event →</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="venues">
+        <div class="section-head"><h2>Corporate Activations Venues</h2><span class="muted small">Campuses and business parks where we've hosted events</span></div>
+        <div class="logo-wall" id="venue-wall"></div>
+      </section>
+
+      <section class="section" id="patrons">
+        <div class="section-head"><h2>Our Patrons</h2><span class="muted small">Brands that have partnered with us</span></div>
+        <div class="logo-wall sm" id="patron-wall"></div>
+      </section>
+
+      <section class="section" id="past">
+        <div class="section-head"><h2>Previous Events</h2><span class="muted small">Memorable moments from our events</span></div>
+        <div class="poster-strip" id="posters"></div>
+      </section>
+
+      <section class="section" id="contact">
+        <div class="section-head"><h2>Contact Us</h2></div>
+        <div class="card">
+          <p style="margin-top:0"><b>Let's Get Started!</b> Send us a message about your event requirements and we will get back to you as soon as possible. Together, we can make sure you get the services you need to make your event a success.</p>
+          <div class="contact-grid" id="contact-grid"></div>
+          <div class="row" style="margin-top:18px">
+            <a class="btn wa" id="wa-btn" target="_blank" rel="noopener">💬 Message us on WhatsApp</a>
+            <a class="btn ghost" id="call-btn">📞 Call us</a>
+            <a class="btn ghost" id="map-btn" target="_blank" rel="noopener">📍 Get directions</a>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <footer></footer>
+
+  <script type="module">
+    import { $, esc, header } from '/js/common.js';
+    import { COMPANY as C, VENUES, PATRONS, POSTERS } from '/js/site-data.js';
+    header('about');
+
+    const fmtPhone = p => p.replace(/(\d{5})(\d{5})/, '$1 $2');
+    $('#about-text').textContent = C.about;
+    $('#points').innerHTML = C.points.map(p => `<li>${esc(p)}</li>`).join('');
+    $('#years').textContent = (new Date().getFullYear() - C.since) + '+';
+    $('#venue-count').textContent = VENUES.length + '+';
+    $('#patron-count').textContent = (PATRONS.length - 1) + '+';
+
+    const tile = l => `<div><div class="logo-tile"><img src="${l.src}" alt="${esc(l.name)}" loading="lazy"></div><div class="logo-cap">${esc(l.name)}</div></div>`;
+    $('#venue-wall').innerHTML = VENUES.map(tile).join('');
+    $('#patron-wall').innerHTML = PATRONS.map(p => `<div class="logo-tile" title="${esc(p.name)}"><img src="${p.src}" alt="${esc(p.name)}" loading="lazy"></div>`).join('');
+    $('#posters').innerHTML = POSTERS.map((p, i) => `<a href="${p}" target="_blank" rel="noopener"><img src="${p}" alt="Previous event poster ${i + 1}" loading="lazy"></a>`).join('');
+
+    $('#contact-grid').innerHTML = [
+      ['📍', 'Address', esc(C.address), C.mapUrl],
+      ['📞', 'Phone', C.phones.map(p => `<a href="tel:+91${p}">${fmtPhone(p)}</a>`).join('<br>')],
+      ['💬', 'WhatsApp', `<a href="https://wa.me/${C.whatsapp}" target="_blank" rel="noopener">${fmtPhone(C.whatsapp.slice(2))}</a>`],
+      ['💳', 'Stall payments (UPI)', `<span style="font-weight:600;word-break:break-all">${esc(C.upi)}</span>`],
+      ['🕘', 'Hours', esc(C.hours)],
+      ['🌐', 'Website', `<a href="${C.website}" target="_blank" rel="noopener">autoexposuburban.com</a>`],
+    ].map(([ic, k, v, href]) => `<div class="contact-item"><span class="ic">${ic}</span><div><b>${k}</b>${href ? `<a href="${href}" target="_blank" rel="noopener">${v}</a>` : `<span>${v}</span>`}</div></div>`).join('');
+    $('#wa-btn').href = `https://wa.me/${C.whatsapp}?text=${encodeURIComponent('Hi, I would like to know more about your events.')}`;
+    $('#call-btn').href = `tel:+91${C.phones[0]}`;
+    $('#map-btn').href = C.mapUrl;
+    if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+  </script>
+</body>
+</html>

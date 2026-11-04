@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Organizer Portal — Auto Expo Suburban Events</title>
+  <script>try{var t=localStorage.getItem('bms_theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+  <link rel="icon" type="image/png" href="/img/stall-icon.png">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="container">
+      <a class="brand" href="/admin.html"><span class="brand-mark" id="brand-mark"></span><span class="brand-text"><span class="brand-name">AUTO EXPO SUBURBAN EVENTS</span><span class="brand-sub">Since 2009 · Organizer Portal</span></span></a>
+      <nav id="admin-nav" class="hidden">
+        <a href="/" target="_blank">View site ↗</a>
+        <button class="bell" id="bell" aria-label="Notifications">🔔<span class="dot hidden" id="bell-dot"></span></button>
+        <button type="button" id="theme-btn"></button>
+        <button id="logout">Log out</button>
+      </nav>
+    </div>
+    <div class="notif-panel hidden" id="notif-panel"></div>
+  </header>
+
+  <main>
+    <!-- Login -->
+    <section class="login card hidden" id="login">
+      <h2>Organizer login</h2>
+      <form id="login-form">
+        <div class="field"><label for="user">Username</label><input id="user" type="text" required autocomplete="username" autocapitalize="none"></div>
+        <div class="field"><label for="pw">Password</label><input id="pw" type="password" required autocomplete="current-password"></div>
+        <button class="btn primary block">Log in</button>
+      </form>
+    </section>
+
+    <!-- App -->
+    <div class="container admin-wrap hidden" id="app">
+      <div class="tabs" role="tablist">
+        <button data-tab="dash" class="on">Dashboard <span class="count hidden" id="pending-count"></span></button>
+        <button data-tab="events">Events</button>
+        <button data-tab="bookings">Bookings</button>
+        <button data-tab="settings">Settings</button>
+      </div>
+
+      <section data-panel="dash">
+        <div id="setup-alerts"></div>
+        <div class="stats" id="stats"></div>
+        <h2>Awaiting your approval</h2>
+        <div class="list" id="pending-list"></div>
+      </section>
+
+      <section data-panel="events" class="hidden">
+        <div id="events-list-view">
+          <div class="row between" style="margin-bottom:16px">
+            <h2 style="margin:0">Your events</h2>
+            <button class="btn primary" id="new-event">+ Post new event</button>
+          </div>
+          <div class="admin-events" id="admin-events"></div>
+        </div>
+
+        <div id="event-editor" class="hidden">
+          <button class="btn ghost sm" id="back-events">← All events</button>
+          <form class="card" id="event-form" style="margin-top:14px">
+            <h2 id="ef-title">Post a new event</h2>
+            <div class="grid2">
+              <div class="field" style="grid-column:1/-1"><label for="f-title">Event title *</label><input id="f-title" name="title" type="text" required maxlength="150"></div>
+              <div class="field"><label for="f-venue">Venue</label><input id="f-venue" name="venue" type="text" maxlength="200" placeholder="e.g. Tech Park Block A, Whitefield"></div>
+              <div class="field"><label for="f-type">Venue type</label>
+                <select id="f-type" name="venue_type"><option value="corporate">Corporate</option><option value="public">Public place</option><option value="apartment">Apartment</option><option value="other">Other</option></select></div>
+              <div class="field"><label for="f-start">Starts</label><input id="f-start" name="start_at" type="datetime-local"></div>
+              <div class="field"><label for="f-end">Ends</label><input id="f-end" name="end_at" type="datetime-local"></div>
+              <div class="field"><label for="f-rent">Rent per stall (₹) *</label><input id="f-rent" name="base_rent" type="number" min="0" step="1" required><span class="hint">Default for every stall; override individual stalls in the layout editor.</span></div>
+              <div class="field"><label for="f-corner">Extra for corner stalls (₹)</label><input id="f-corner" name="corner_charge" type="number" min="0" step="1" value="0"><span class="hint">Optional. Added on top of rent for stalls marked ★ corner.</span></div>
+              <div class="field" style="grid-column:1/-1"><label for="f-desc">Description / advertisement</label><textarea id="f-desc" name="description" rows="4" maxlength="4000" placeholder="What's the event, expected footfall, what each stall includes…"></textarea></div>
+              <div class="field"><label>Banner image</label>
+                <div class="upload-preview"><img id="banner-prev" class="hidden" alt="Banner preview"><input type="file" name="banner" id="f-banner" accept="image/*">
+                <label class="check hidden" id="rm-banner-wrap"><input type="checkbox" name="remove_banner" value="1"> Remove banner</label></div></div>
+              <div class="field"><label>Stall layout image (optional)</label>
+                <div class="upload-preview"><img id="layout-prev" class="hidden" alt="Layout preview"><input type="file" name="layout" id="f-layout" accept="image/*">
+                <label class="check hidden" id="rm-layout-wrap"><input type="checkbox" name="remove_layout" value="1"> Remove layout</label>
+                <span class="hint">Without a layout, stalls appear on a plain grid.</span></div></div>
+              <div class="field"><label for="f-status">Status</label>
+                <select id="f-status" name="status"><option value="published">Published — open for booking</option><option value="draft">Draft — hidden</option><option value="closed">Closed — visible, no new bookings</option></select></div>
+            </div>
+            <div class="row">
+              <button class="btn primary" type="submit" id="save-event">Save event</button>
+              <button class="btn danger hidden" type="button" id="delete-event">Delete event</button>
+            </div>
+          </form>
+
+          <section class="card hidden" id="stall-editor" style="margin-top:20px">
+            <div class="row between" style="margin-bottom:10px">
+              <div><h2 style="margin:0">Stalls on the layout</h2><span class="muted small" id="stall-info"></span></div>
+              <div class="row">
+                <button class="btn ghost sm" id="add-stall">+ Add stall</button>
+                <button class="btn ghost sm" id="gen-stalls">Generate stalls…</button>
+                <button class="btn green sm" id="save-stalls">Save stalls</button>
+              </div>
+            </div>
+            <p class="muted small" style="margin-top:0">Click <b>+ Add stall</b> then click on the layout to place it. Drag a stall to move it, drag its blue corner to resize. Select a stall to set its label, corner status and price.</p>
+            <div class="editor">
+              <div class="map-scroll"><div class="stage edit" id="ed-stage"></div></div>
+              <div class="card" id="ed-panel" style="box-shadow:none"></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section data-panel="bookings" class="hidden">
+        <div class="row" style="margin-bottom:16px">
+          <select id="bf-event" style="max-width:280px"><option value="">All events</option></select>
+          <select id="bf-status" style="max-width:220px">
+            <option value="">All statuses</option><option value="pending">Pending approval</option><option value="approved">Confirmed</option>
+            <option value="held">Awaiting payment</option><option value="rejected">Rejected</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div class="list" id="bookings-list"></div>
+      </section>
+
+      <section data-panel="settings" class="hidden">
+        <form class="card" id="settings-form" style="max-width:720px">
+          <h2>Organizer &amp; payment settings</h2>
+          <div class="grid2">
+            <div class="field"><label for="s-org">Organizer name</label><input id="s-org" name="organizer_name" type="text"></div>
+            <div class="field"><label for="s-wa">Your WhatsApp number</label><input id="s-wa" name="organizer_whatsapp" type="tel" placeholder="98765 43210"><span class="hint">Booking alerts &amp; vendor details are sent here.</span></div>
+            <div class="field"><label for="s-upi">UPI ID</label><input id="s-upi" name="upi_id" type="text" placeholder="yourname@okhdfcbank"><span class="hint">Generates a QR with the exact stall amount for each vendor.</span></div>
+            <div class="field"><label for="s-payee">Payee name (shown in UPI app)</label><input id="s-payee" name="payee_name" type="text"></div>
+            <div class="field"><label for="s-hold">Hold time while vendor pays (minutes)</label><input id="s-hold" name="hold_minutes" type="number" min="2" max="60"></div>
+            <div class="field"><label>Your payment QR code</label>
+              <div class="upload-preview"><img id="qr-prev" class="hidden" alt="Payment QR"><input type="file" name="payment_qr" accept="image/*">
+              <label class="check hidden" id="rm-qr-wrap"><input type="checkbox" name="remove_payment_qr" value="1"> Remove</label>
+              <span class="hint">Shown to vendors on the payment page. Vendors type the amount when scanning; the UPI ID adds a one-tap pay button with the amount filled in.</span></div></div>
+            <div class="field" style="grid-column:1/-1"><label for="s-note">Payment instructions (optional)</label><textarea id="s-note" name="payment_note" rows="2" placeholder="e.g. Rent is non-refundable once approved."></textarea></div>
+          </div>
+          <div id="wa-status" class="alert info"></div>
+          <button class="btn primary">Save settings</button>
+        </form>
+
+        <form class="card" id="pw-form" style="max-width:720px;margin-top:20px">
+          <h2>Change password</h2>
+          <div class="grid2">
+            <div class="field"><label for="pw-cur">Current password</label><input id="pw-cur" type="password" required autocomplete="current-password"></div>
+            <div class="field"><label for="pw-new">New password</label><input id="pw-new" type="password" required minlength="6" autocomplete="new-password"></div>
+          </div>
+          <button class="btn">Update password</button>
+        </form>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="/js/admin.js"></script>
+</body>
+</html>

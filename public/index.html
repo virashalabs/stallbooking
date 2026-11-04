@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Auto Expo Suburban Events — Book stalls at upcoming events</title>
+  <script>try{var t=localStorage.getItem('bms_theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+  <link rel="icon" type="image/png" href="/img/stall-icon.png">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main>
+    <!-- Banner carousel -->
+    <section class="carousel" id="carousel" aria-roledescription="carousel" aria-label="Featured events">
+      <div class="track" id="track"></div>
+      <button class="car-arrow prev" id="prev" aria-label="Previous banner">‹</button>
+      <button class="car-arrow next" id="next" aria-label="Next banner">›</button>
+      <div class="dots" id="dots"></div>
+    </section>
+
+    <!-- Upcoming events -->
+    <section class="container section" id="events">
+      <div class="section-head">
+        <h2>Upcoming Events</h2>
+        <div class="filters" id="filters"></div>
+      </div>
+      <div class="poster-grid" id="grid"></div>
+    </section>
+
+    <section class="container section">
+      <div class="section-head"><h2>Book your stall in 4 easy steps</h2></div>
+      <div class="how">
+        <div class="step"><div class="num">1</div><b>Choose an event</b><div class="muted small">Corporate campuses, public places and apartments.</div></div>
+        <div class="step"><div class="num">2</div><b>Pick your stall</b><div class="muted small">See the live layout — just like booking a seat.</div></div>
+        <div class="step"><div class="num">3</div><b>Pay via UPI</b><div class="muted small">Your stall is held for you while you pay.</div></div>
+        <div class="step"><div class="num">4</div><b>Get confirmed</b><div class="muted small">The organizer approves and your stall is assigned.</div></div>
+      </div>
+    </section>
+
+    <section class="container section">
+      <div class="section-head"><h2>Our Patrons</h2><a href="/about.html#patrons" class="btn ghost sm">See all →</a></div>
+      <div class="logo-wall sm" id="patrons"></div>
+    </section>
+
+    <section class="container section hidden" id="my-bookings">
+      <div class="section-head"><h2>My bookings</h2><span class="muted small">Bookings made from this browser</span></div>
+      <div class="list" id="mine"></div>
+    </section>
+  </main>
+  <footer></footer>
+
+  <script type="module">
+    import { $, $$, api, esc, money, fmtRange, header, myBookings, forgetBookings, GONE, statusBadge, VENUE_TYPES, toast } from '/js/common.js';
+    import { PATRONS, VENUES } from '/js/site-data.js';
+    header('events');
+
+    let events = [];
+    try { events = await api('/api/events'); } catch (e) { toast(e.message, 'error'); }
+    const art = ev => ev.banner || ev.layout;
+    const avail = ev => ev.status === 'closed' ? ['Bookings closed', true]
+      : ev.stall_count && !ev.available_count ? ['Sold out', true]
+      : [`${ev.available_count} of ${ev.stall_count} stalls left`, false];
+
+    // ---------- banner carousel
+    const slides = events.filter(e => e.status === 'published').map(ev => {
+      const [left, out] = avail(ev);
+      const img = art(ev);
+      return `<a class="slide" href="/event.html?id=${ev.id}" aria-label="${esc(ev.title)}">
+        ${img ? `<div class="slide-bg" style="background-image:url('${esc(img)}')"></div>` : ''}
+        <div class="container slide-inner">
+          ${img ? `<img class="slide-poster" src="${esc(img)}" alt="">` : `<div class="slide-poster" style="display:grid;place-items:center;font-weight:800;font-size:1.4rem;padding:20px;text-align:center">${esc(ev.title)}</div>`}
+          <div class="slide-info">
+            <div class="slide-kicker">Now booking · ${esc(VENUE_TYPES[ev.venue_type] || 'Event')}</div>
+            <h2>${esc(ev.title)}</h2>
+            <div class="meta"><span>📅 ${esc(fmtRange(ev.start_at, ev.end_at))}</span>${ev.venue ? `<span>📍 ${esc(ev.venue)}</span>` : ''}</div>
+            <div class="chips"><span class="${out ? '' : 'hot'}">${esc(left)}</span><span>Stalls from ${money(ev.min_price)}</span></div>
+            <span class="btn primary">Book a stall →</span>
+          </div>
+        </div></a>`;
+    });
+    const brandLogos = [PATRONS[0], PATRONS[1], PATRONS[2], VENUES[5], VENUES[4], VENUES[11]];
+    slides.push(`<a class="slide brand-slide" href="/about.html">
+      <div class="container slide-inner">
+        <div class="slide-info">
+          <span class="since">SINCE 2009</span>
+          <p class="big">AUTO EXPO<br>SUBURBAN EVENTS</p>
+          <div class="meta"><span>Chennai's Premier Corporate Event Planner</span><span style="font-weight:500">Automotive events, BTL activations &amp; stall bookings at top corporate campuses.</span></div>
+          <span class="btn primary">About us →</span>
+        </div>
+        <div class="logos">${brandLogos.map(l => `<div><img src="${l.src}" alt="${esc(l.name)}"></div>`).join('')}</div>
+      </div></a>`);
+    $('#track').innerHTML = slides.join('');
+    $('#dots').innerHTML = slides.map((_, i) => `<button aria-label="Banner ${i + 1}"></button>`).join('');
+    let idx = 0, timer;
+    const go = i => {
+      idx = (i + slides.length) % slides.length;
+      $('#track').style.transform = `translateX(-${idx * 100}%)`;
+      $$('#dots button').forEach((d, j) => d.classList.toggle('on', j === idx));
+    };
+    const auto = () => { clearInterval(timer); if (slides.length > 1) timer = setInterval(() => go(idx + 1), 5500); };
+    $('#prev').onclick = () => { go(idx - 1); auto(); };
+    $('#next').onclick = () => { go(idx + 1); auto(); };
+    $$('#dots button').forEach((d, j) => d.onclick = () => { go(j); auto(); });
+    $('#carousel').addEventListener('mouseenter', () => clearInterval(timer));
+    $('#carousel').addEventListener('mouseleave', auto);
+    let sx = null;
+    $('#carousel').addEventListener('touchstart', e => { sx = e.touches[0].clientX; }, { passive: true });
+    $('#carousel').addEventListener('touchend', e => {
+      if (sx === null) return;
+      const dx = e.changedTouches[0].clientX - sx; sx = null;
+      if (Math.abs(dx) > 40) { go(idx + (dx < 0 ? 1 : -1)); auto(); }
+    });
+    if (slides.length < 2) { $('#prev').classList.add('hidden'); $('#next').classList.add('hidden'); $('#dots').classList.add('hidden'); }
+    go(0); auto();
+
+    // ---------- upcoming events grid with filters
+    const types = ['all', ...new Set(events.map(e => e.venue_type))];
+    let filter = 'all';
+    const drawFilters = () => {
+      $('#filters').innerHTML = types.length > 2 ? types.map(t =>
+        `<button data-t="${t}" class="${t === filter ? 'on' : ''}">${t === 'all' ? 'All' : esc(VENUE_TYPES[t] || t)}</button>`).join('') : '';
+      $$('#filters button').forEach(b => b.onclick = () => { filter = b.dataset.t; drawFilters(); drawGrid(); });
+    };
+    const drawGrid = () => {
+      const list = events.filter(e => filter === 'all' || e.venue_type === filter);
+      $('#grid').innerHTML = list.length ? list.map(ev => {
+        const [left, out] = avail(ev);
+        const img = art(ev);
+        return `<a class="poster-card" href="/event.html?id=${ev.id}">
+          <div class="pimg ${ev.banner ? 'cover' : ''}" ${img ? `style="background-image:url('${esc(img)}')"` : ''}>
+            ${img ? '' : `<div class="poster-placeholder">${esc(ev.title)}</div>`}
+            <div class="strip"><span class="left ${out ? 'out' : ''}">${esc(left)}</span><span>from ${money(ev.min_price)}</span></div>
+          </div>
+          <div><h3>${esc(ev.title)}</h3>
+            <div class="sub">${esc(fmtRange(ev.start_at, ev.end_at))}<br>${esc(ev.venue || 'Venue TBA')}</div></div>
+        </a>`;
+      }).join('') : `<div class="card empty" style="grid-column:1/-1">No upcoming events right now. Please check back soon.</div>`;
+    };
+    drawFilters(); drawGrid();
+
+    // ---------- patrons strip
+    $('#patrons').innerHTML = PATRONS.slice(0, 12).map(p => `<div class="logo-tile" title="${esc(p.name)}"><img src="${p.src}" alt="${esc(p.name)}" loading="lazy"></div>`).join('');
+
+    // ---------- my bookings
+    // Check each saved booking's live status; expired / cancelled ones are removed from the list.
+    const saved = myBookings();
+    const checked = await Promise.all(saved.map(async b => {
+      try {
+        const d = await api(`/api/bookings/${b.id}?t=${encodeURIComponent(b.token)}`);
+        return { ...b, status: d.booking.status };
+      } catch (e) {
+        return e.status === 404 ? { ...b, status: 'missing' } : { ...b, status: null };
+      }
+    }));
+    const gone = checked.filter(b => GONE.includes(b.status) || b.status === 'missing').map(b => b.id);
+    if (gone.length) forgetBookings(gone);
+    const mine = checked.filter(b => !gone.includes(b.id));
+    if (mine.length) {
+      $('#my-bookings').classList.remove('hidden');
+      $('#mine').innerHTML = mine.map(b => `<a class="bk" style="text-decoration:none;color:inherit" href="/booking.html?id=${b.id}&t=${encodeURIComponent(b.token)}">
+        <div><div class="row" style="gap:8px"><h3>Stall ${esc(b.stall)} · ${esc(b.event)}</h3>${b.status ? statusBadge(b.status) : ''}</div>
+          <span class="muted small">${esc(b.business)} · Booking AESE-${b.id}</span></div>
+        <div class="acts"><span class="btn ghost sm">View my Stall Booking</span></div></a>`).join('');
+    }
+    if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+  </script>
+</body>
+</html>
