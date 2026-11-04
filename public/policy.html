@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cancellation &amp; Refund Policy — Auto Expo Suburban Events</title>
+  <script>try{var t=localStorage.getItem('bms_theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+  <link rel="icon" type="image/png" href="/img/stall-icon.png">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main>
+    <section class="page-hero">
+      <div class="container">
+        <h1>Cancellation &amp; Refund Policy</h1>
+        <p>Please read this before booking a stall. By reserving a stall you agree to these terms.</p>
+      </div>
+    </section>
+    <div class="container section">
+      <div class="card policy-card">
+        <div class="alert info" style="font-size:1rem"><b>In short:</b> tell us at least <b>7 days before the event</b> to get a <b>full refund</b>. Cancellations after that are <b>not refunded</b>.</div>
+        <ol class="policy-list" id="policy"></ol>
+        <p class="muted small" style="margin-bottom:0">Questions? WhatsApp us at <a href="https://wa.me/919840049879" target="_blank" rel="noopener">98400 49879</a> or call <a href="tel:+919841517136">98415 17136</a>.</p>
+      </div>
+    </div>
+  </main>
+  <footer></footer>
+  <script type="module">
+    import { $, esc, header } from '/js/common.js';
+    import { POLICY } from '/js/site-data.js';
+    header('');
+    $('#policy').innerHTML = POLICY.map(([t, d]) => `<li><b>${esc(t)}.</b> ${esc(d)}</li>`).join('');
+  </script>
+</body>
+</html>

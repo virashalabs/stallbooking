@@ -88,7 +88,52 @@ CREATE TABLE IF NOT EXISTS notifications (
   is_read INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS promo_codes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  kind TEXT NOT NULL DEFAULT 'promo',           -- promo: any vendor | coupon: one vendor, stacks on top of a promo
+  discount_type TEXT NOT NULL DEFAULT 'flat',   -- flat (₹) | percent
+  value INTEGER NOT NULL,
+  max_discount INTEGER,                         -- cap for percent discounts
+  event_id INTEGER REFERENCES events(id) ON DELETE CASCADE,  -- NULL = all events
+  vendor_name TEXT NOT NULL DEFAULT '',
+  vendor_phone TEXT NOT NULL DEFAULT '',
+  usage_limit INTEGER,                          -- NULL = unlimited
+  valid_until TEXT,                             -- YYYY-MM-DD (IST), inclusive
+  active INTEGER NOT NULL DEFAULT 1,
+  note TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS members (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  member_no TEXT NOT NULL UNIQUE,
+  token TEXT NOT NULL,
+  name TEXT NOT NULL,
+  business_name TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  issued_on TEXT NOT NULL,                      -- YYYY-MM-DD
+  expires_on TEXT NOT NULL,                     -- issued_on + 1 year
+  status TEXT NOT NULL DEFAULT 'active',        -- active | revoked
+  booking_id INTEGER,
+  created_at INTEGER NOT NULL
+);
 `);
+// Columns added after the first release (existing databases are upgraded in place).
+function addColumn(table, col, def) {
+  if (!db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+}
+addColumn('bookings', 'gross_amount', 'INTEGER');
+addColumn('bookings', 'promo_code', "TEXT NOT NULL DEFAULT ''");
+addColumn('bookings', 'promo_discount', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('bookings', 'coupon_code', "TEXT NOT NULL DEFAULT ''");
+addColumn('bookings', 'coupon_discount', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('bookings', 'policy_accepted_at', 'INTEGER');
+addColumn('bookings', 'cancel_requested_at', 'INTEGER');
+addColumn('bookings', 'cancel_reason', "TEXT NOT NULL DEFAULT ''");
+addColumn('bookings', 'refund_eligible', 'INTEGER');
+addColumn('bookings', 'refund_amount', 'INTEGER');
+addColumn('bookings', 'refunded_at', 'INTEGER');
+db.exec('UPDATE bookings SET gross_amount = base_amount + corner_amount WHERE gross_amount IS NULL');
 
 const ACTIVE = `('held','pending','approved')`;
 const getSetting = (k, d = '') => db.prepare('SELECT value FROM settings WHERE key=?').get(k)?.value ?? d;
@@ -195,16 +240,31 @@ function eventSummary(ev) {
   };
 }
 
+function discountText(b) {
+  const parts = [];
+  if (b.promo_discount) parts.push(`promo ${b.promo_code} −${rupees(b.promo_discount)}`);
+  if (b.coupon_discount) parts.push(`coupon ${b.coupon_code} −${rupees(b.coupon_discount)}`);
+  return parts.join(', ');
+}
 function bookingMessage(b, ev, kind) {
-  const amt = `₹${b.amount.toLocaleString('en-IN')}`;
+  const amt = rupees(b.amount);
+  const disc = discountText(b);
   if (kind === 'payment') {
     return `Stall ${b.stall_label} was booked by ${b.business_name} for the product(s) "${b.products}" and made a payment of ${amt} for the event titled "${ev.title}".` +
+      (disc ? ` (Stall price ${rupees(b.gross_amount)}; ${disc}.)` : '') +
       (b.utr ? ` UTR/Ref: ${b.utr}.` : '') + ` Please verify and approve in the admin portal.`;
+  }
+  if (kind === 'cancel') {
+    const days = ev.start_at ? Math.floor((eventStartMs(ev) - (b.cancel_requested_at || now())) / 864e5) : null;
+    return `Cancellation requested by ${b.business_name} for stall ${b.stall_label}, "${ev.title}" (AESE-${b.id}). Amount paid: ${amt}.` +
+      (days !== null ? ` Requested ${days} day(s) before the event —` : '') +
+      (b.refund_eligible ? ' eligible for a full refund under the 7-day policy.' : ' NOT eligible for a refund under the 7-day policy.') +
+      (b.cancel_reason ? ` Reason: ${b.cancel_reason}` : '');
   }
   return `✅ Stall ${b.stall_label} confirmed for "${ev.title}"\n` +
     `Vendor: ${b.business_name}\nContact: ${b.contact_name}\nPhone: +${b.phone}\n` +
     (b.email ? `Email: ${b.email}\n` : '') +
-    `Products: ${b.products}\nAmount paid: ${amt}` + (b.utr ? `\nUTR/Ref: ${b.utr}` : '') + `\nBooking ID: AESE-${b.id}`;
+    `Products: ${b.products}\nAmount paid: ${amt}` + (disc ? ` (${disc})` : '') + (b.utr ? `\nUTR/Ref: ${b.utr}` : '') + `\nBooking ID: AESE-${b.id}`;
 }
 
 // Optional: WhatsApp Cloud API (Meta). Without credentials the portal shows click-to-chat links instead.
@@ -235,6 +295,70 @@ function notify(booking, kind, message) {
 }
 
 const waLink = (phone, text) => phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : null;
+const rupees = n => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+const httpError = (status, message) => Object.assign(new Error(message), { status });
+
+// ---------------------------------------------------------------- dates (event times are IST)
+const IST_MS = 5.5 * 3600e3;
+const istToday = () => new Date(now() + IST_MS).toISOString().slice(0, 10);
+function eventStartMs(ev) {
+  if (!ev?.start_at) return null;
+  const t = Date.parse(`${ev.start_at.slice(0, 16)}:00+05:30`);
+  return Number.isFinite(t) ? t : null;
+}
+// Cancellation & refund policy: full refund only if cancellation is requested at least 7 days before the event.
+const REFUND_DAYS = 7;
+const refundDeadline = ev => { const s = eventStartMs(ev); return s ? s - REFUND_DAYS * 864e5 : null; };
+
+// ---------------------------------------------------------------- promo codes & vendor coupons
+function discountFor(p, amount) {
+  if (!p || amount <= 0) return 0;
+  let d = p.discount_type === 'percent' ? Math.round(amount * p.value / 100) : p.value;
+  if (p.discount_type === 'percent' && p.max_discount) d = Math.min(d, p.max_discount);
+  return Math.max(0, Math.min(d, amount));
+}
+const codeUses = (code, excludeBookingId = 0) => db.prepare(
+  `SELECT COUNT(*) c FROM bookings WHERE id<>? AND status IN ${ACTIVE} AND (promo_code=? COLLATE NOCASE OR coupon_code=? COLLATE NOCASE)`,
+).get(excludeBookingId, code, code).c;
+const describeDiscount = p => p.discount_type === 'percent'
+  ? `${p.value}% off${p.max_discount ? ` (up to ${rupees(p.max_discount)})` : ''}` : `${rupees(p.value)} off`;
+
+function findValidCode(code, booking) {
+  const p = db.prepare('SELECT * FROM promo_codes WHERE code=? COLLATE NOCASE').get(str(code, 40));
+  if (!p || !p.active) throw httpError(400, 'This code is not valid.');
+  if (p.valid_until && p.valid_until < istToday()) throw httpError(400, 'This code has expired.');
+  if (p.event_id && p.event_id !== booking.event_id) throw httpError(400, 'This code is not valid for this event.');
+  if (p.kind === 'coupon' && normalizePhone(p.vendor_phone) !== booking.phone)
+    throw httpError(400, 'This coupon was issued to another vendor. It only works with the WhatsApp number it was sent to.');
+  if (p.usage_limit && codeUses(p.code, booking.id) >= p.usage_limit) throw httpError(400, 'This code has already been used the maximum number of times.');
+  return p;
+}
+// Promo discount applies to the stall price first; the vendor coupon then applies on top of what remains.
+function priceBooking(b, promo, coupon) {
+  const gross = b.gross_amount ?? (b.base_amount + b.corner_amount);
+  const promo_discount = discountFor(promo, gross);
+  const coupon_discount = discountFor(coupon, gross - promo_discount);
+  return {
+    gross_amount: gross, promo_code: promo?.code || '', promo_discount,
+    coupon_code: coupon?.code || '', coupon_discount, amount: gross - promo_discount - coupon_discount,
+  };
+}
+const codeRow = code => code ? db.prepare('SELECT * FROM promo_codes WHERE code=? COLLATE NOCASE').get(code) : null;
+
+// ---------------------------------------------------------------- membership cards
+const MEMBER_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I to avoid misreading
+function newMemberNo() {
+  for (;;) {
+    const pick = n => Array.from(crypto.randomBytes(n), x => MEMBER_ALPHABET[x % MEMBER_ALPHABET.length]).join('');
+    const no = `AES-${pick(4)}-${pick(4)}`;
+    if (!db.prepare('SELECT 1 FROM members WHERE member_no=?').get(no)) return no;
+  }
+}
+function plusOneYear(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(Date.UTC(y + 1, m - 1, d)).toISOString().slice(0, 10);
+}
+const memberStatus = m => m.status === 'revoked' ? 'revoked' : (m.expires_on < istToday() ? 'expired' : 'active');
 
 // ---------------------------------------------------------------- uploads
 const upload = multer({
@@ -319,6 +443,7 @@ app.post('/api/events/:id/hold', (req, res) => {
   };
   if (!v.business_name || !v.contact_name || !v.products) return res.status(400).json({ error: 'Business name, contact name and products are required.' });
   if (v.phone.length < 11 || v.phone.length > 15) return res.status(400).json({ error: 'Please enter a valid WhatsApp number.' });
+  if (b.accept_policy !== true) return res.status(400).json({ error: 'Please read and accept the Cancellation & Refund Policy to continue.' });
 
   try {
     const result = tx(() => {
@@ -331,10 +456,10 @@ app.post('/api/events/:id/hold', (req, res) => {
       const p = priceFor(stall, ev);
       const token = crypto.randomBytes(18).toString('base64url');
       const holdMs = publicSettings().hold_minutes * 60e3;
-      const info = db.prepare(`INSERT INTO bookings(event_id,stall_id,stall_label,token,business_name,contact_name,phone,email,products,base_amount,corner_amount,amount,status,hold_expires_at,created_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'held',?,?)`).run(
+      const info = db.prepare(`INSERT INTO bookings(event_id,stall_id,stall_label,token,business_name,contact_name,phone,email,products,base_amount,corner_amount,gross_amount,amount,status,hold_expires_at,created_at,policy_accepted_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'held',?,?,?)`).run(
         ev.id, stall.id, stall.label, token, v.business_name, v.contact_name, v.phone, v.email, v.products,
-        p.base, p.corner, p.total, now() + holdMs, now());
+        p.base, p.corner, p.total, p.total, now() + holdMs, now(), now());
       return { booking_id: Number(info.lastInsertRowid), token };
     });
     res.json(result);
@@ -367,7 +492,7 @@ app.get('/api/bookings/:id', async (req, res) => {
   const upiId = getSetting('upi_id');
   const payee = getSetting('payee_name') || getSetting('organizer_name');
   let payment = null;
-  if (b.status === 'held') {
+  if (b.status === 'held' && b.amount > 0) {
     const note = `Stall ${b.stall_label} AESE-${b.id}`.slice(0, 50);
     const upiLink = upiId
       ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payee)}&am=${b.amount}&cu=INR&tn=${encodeURIComponent(note)}`
@@ -380,16 +505,67 @@ app.get('/api/bookings/:id', async (req, res) => {
     };
   }
   const orgPhone = normalizePhone(getSetting('organizer_whatsapp'));
+  const deadline = refundDeadline(ev);
+  let orgMsg = null;
+  if (b.cancel_requested_at && ['pending', 'approved'].includes(b.status)) orgMsg = bookingMessage(b, ev, 'cancel');
+  else if (b.status === 'pending') orgMsg = bookingMessage(b, ev, 'payment');
   res.json({
     booking: publicBooking(b),
     event: { id: ev.id, title: ev.title, venue: ev.venue, start_at: ev.start_at, end_at: ev.end_at, banner: ev.banner },
     payment,
     server_time: now(),
+    policy: { refund_days: REFUND_DAYS, refund_deadline: deadline, full_refund_now: deadline ? now() <= deadline : false },
     organizer: {
       name: getSetting('organizer_name'),
-      whatsapp_link: b.status === 'pending' ? waLink(orgPhone, bookingMessage(b, ev, 'payment')) : null,
+      whatsapp_link: orgMsg ? waLink(orgPhone, orgMsg) : null,
     },
   });
+});
+
+// Apply a promo code / vendor coupon at checkout (while the stall is held).
+app.post('/api/bookings/:id/code', (req, res) => {
+  const b = loadOwnBooking(req, res);
+  if (!b) return;
+  if (b.status !== 'held') return res.status(400).json({ error: 'Codes can only be applied before you submit the payment.' });
+  try {
+    const p = findValidCode(req.body?.code, b);
+    let promo = codeRow(b.promo_code), coupon = codeRow(b.coupon_code);
+    if (p.kind === 'coupon') coupon = p; else promo = p;
+    const priced = priceBooking(b, promo, coupon);
+    const saved = (p.kind === 'coupon' ? priced.coupon_discount : priced.promo_discount);
+    if (!saved) throw httpError(400, 'This code gives no further discount on this booking.');
+    db.prepare('UPDATE bookings SET promo_code=?, promo_discount=?, coupon_code=?, coupon_discount=?, amount=? WHERE id=?')
+      .run(priced.promo_code, priced.promo_discount, priced.coupon_code, priced.coupon_discount, priced.amount, b.id);
+    res.json({ ok: true, message: `${p.code} applied — you save ${rupees(saved)}.` });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.status ? e.message : 'Could not apply the code.' });
+  }
+});
+app.post('/api/bookings/:id/code/remove', (req, res) => {
+  const b = loadOwnBooking(req, res);
+  if (!b) return;
+  if (b.status !== 'held') return res.status(400).json({ error: 'Codes can only be changed before you submit the payment.' });
+  const kind = req.body?.kind === 'coupon' ? 'coupon' : 'promo';
+  const priced = priceBooking(b, kind === 'promo' ? null : codeRow(b.promo_code), kind === 'coupon' ? null : codeRow(b.coupon_code));
+  db.prepare('UPDATE bookings SET promo_code=?, promo_discount=?, coupon_code=?, coupon_discount=?, amount=? WHERE id=?')
+    .run(priced.promo_code, priced.promo_discount, priced.coupon_code, priced.coupon_discount, priced.amount, b.id);
+  res.json({ ok: true });
+});
+
+// Vendor asks to cancel a paid booking. Eligibility for a full refund is fixed at the moment of the request.
+app.post('/api/bookings/:id/cancel-request', (req, res) => {
+  const b = loadOwnBooking(req, res);
+  if (!b) return;
+  if (!['pending', 'approved'].includes(b.status)) return res.status(400).json({ error: 'This booking cannot be cancelled.' });
+  if (b.cancel_requested_at) return res.json({ ok: true });
+  const ev = getEvent(b.event_id);
+  const deadline = refundDeadline(ev);
+  const eligible = deadline ? now() <= deadline : 0;
+  db.prepare('UPDATE bookings SET cancel_requested_at=?, cancel_reason=?, refund_eligible=? WHERE id=?')
+    .run(now(), str(req.body?.reason, 300), eligible ? 1 : 0, b.id);
+  const fresh = db.prepare('SELECT * FROM bookings WHERE id=?').get(b.id);
+  notify(fresh, 'cancel', bookingMessage(fresh, ev, 'cancel'));
+  res.json({ ok: true, refund_eligible: !!eligible });
 });
 
 app.post('/api/bookings/:id/paid', (req, res) => {
@@ -424,6 +600,21 @@ app.post('/api/bookings/:id/cancel', (req, res) => {
   if (b.status !== 'held') return res.status(400).json({ error: 'Only an unpaid hold can be cancelled here.' });
   db.prepare(`UPDATE bookings SET status='cancelled', decided_at=? WHERE id=?`).run(now(), b.id);
   res.json({ ok: true });
+});
+
+// Public membership card (link shared with the vendor). The QR on the card opens this same page to verify it.
+app.get('/api/members/:no', async (req, res) => {
+  const m = db.prepare('SELECT * FROM members WHERE member_no=?').get(str(req.params.no, 20).toUpperCase());
+  const t = String(req.query.t || '');
+  if (!m || t.length !== m.token.length || !crypto.timingSafeEqual(Buffer.from(t), Buffer.from(m.token))) {
+    return res.status(404).json({ error: 'Membership card not found.' });
+  }
+  const url = `${req.protocol}://${req.get('host')}/card.html?n=${encodeURIComponent(m.member_no)}&t=${encodeURIComponent(m.token)}`;
+  res.json({
+    member: { member_no: m.member_no, name: m.name, business_name: m.business_name, issued_on: m.issued_on, expires_on: m.expires_on, state: memberStatus(m) },
+    qr: await QRCode.toDataURL(url, { width: 240, margin: 1, color: { dark: '#000000', light: '#ffffff' } }),
+    url,
+  });
 });
 
 // ----- admin API
@@ -571,15 +762,17 @@ app.get('/api/admin/bookings', (req, res) => {
   sweepExpiredHolds();
   const where = [], args = [];
   if (req.query.event) { where.push('b.event_id=?'); args.push(Number(req.query.event)); }
-  if (req.query.status) { where.push('b.status=?'); args.push(String(req.query.status)); }
-  const rows = db.prepare(`SELECT b.*, e.title event_title FROM bookings b JOIN events e ON e.id=b.event_id
-    ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY CASE b.status WHEN 'pending' THEN 0 WHEN 'held' THEN 1 ELSE 2 END, b.created_at DESC LIMIT 500`).all(...args);
+  if (req.query.status === 'cancel_requested') where.push("b.cancel_requested_at IS NOT NULL AND b.status IN ('pending','approved')");
+  else if (req.query.status) { where.push('b.status=?'); args.push(String(req.query.status)); }
+  const rows = db.prepare(`SELECT b.*, e.title event_title, e.start_at event_start FROM bookings b JOIN events e ON e.id=b.event_id
+    ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY CASE WHEN b.cancel_requested_at IS NOT NULL AND b.status IN ('pending','approved') THEN 0 WHEN b.status='pending' THEN 1 WHEN b.status='held' THEN 2 ELSE 3 END, b.created_at DESC LIMIT 500`).all(...args);
   res.json(rows.map(r => {
     const { token, ...rest } = r;
     const msg = bookingMessage(r, { title: r.event_title }, 'details');
     return {
       ...rest,
       details_text: msg,
+      refund_deadline: refundDeadline({ start_at: r.event_start }),
       wa_vendor: waLink(r.phone, r.status === 'approved'
         ? `Hi ${r.contact_name}, your stall ${r.stall_label} for "${r.event_title}" is confirmed. Booking ID: AESE-${r.id}. See you there!`
         : `Hi ${r.contact_name}, regarding your stall booking ${r.stall_label} for "${r.event_title}" (AESE-${r.id}).`),
@@ -600,11 +793,113 @@ function decide(req, res, from, to, kind) {
 }
 app.post('/api/admin/bookings/:id/approve', (req, res) => decide(req, res, ['pending', 'held'], 'approved', 'approved'));
 app.post('/api/admin/bookings/:id/reject', (req, res) => decide(req, res, ['pending', 'held', 'approved'], 'rejected', 'rejected'));
+// Confirm a cancellation (the vendor's request, or the organizer's own decision): releases the stall.
+app.post('/api/admin/bookings/:id/cancel', (req, res) => {
+  const b = db.prepare('SELECT * FROM bookings WHERE id=?').get(Number(req.params.id));
+  if (!b) return res.status(404).json({ error: 'Booking not found.' });
+  if (!['pending', 'approved', 'held'].includes(b.status)) return res.status(400).json({ error: `Booking is already ${b.status}.` });
+  const ev = getEvent(b.event_id);
+  const deadline = refundDeadline(ev);
+  const eligible = b.refund_eligible ?? (deadline ? (now() <= deadline ? 1 : 0) : 0);
+  db.prepare(`UPDATE bookings SET status='cancelled', decided_at=?, admin_note=?, refund_eligible=?,
+    cancel_requested_at=COALESCE(cancel_requested_at, ?) WHERE id=?`).run(now(), str(req.body?.note, 300), eligible, now(), b.id);
+  res.json({ ok: true });
+});
+app.post('/api/admin/bookings/:id/refund', (req, res) => {
+  const b = db.prepare('SELECT * FROM bookings WHERE id=?').get(Number(req.params.id));
+  if (!b) return res.status(404).json({ error: 'Booking not found.' });
+  if (!['cancelled', 'rejected'].includes(b.status) || !b.paid_at) return res.status(400).json({ error: 'Only paid bookings that are cancelled or rejected can be refunded.' });
+  const amount = Math.min(intOr(req.body?.amount, b.amount), b.amount);
+  db.prepare('UPDATE bookings SET refund_amount=?, refunded_at=? WHERE id=?').run(amount, now(), b.id);
+  res.json({ ok: true });
+});
+
+// ----- promo codes & vendor coupons
+app.get('/api/admin/promos', (req, res) => {
+  const rows = db.prepare(`SELECT p.*, e.title event_title FROM promo_codes p LEFT JOIN events e ON e.id=p.event_id ORDER BY p.active DESC, p.created_at DESC`).all();
+  res.json(rows.map(p => ({ ...p, uses: codeUses(p.code), describe: describeDiscount(p), expired: !!(p.valid_until && p.valid_until < istToday()) })));
+});
+function promoFields(b) {
+  const kind = b.kind === 'coupon' ? 'coupon' : 'promo';
+  const discount_type = b.discount_type === 'percent' ? 'percent' : 'flat';
+  const value = intOr(b.value, 0);
+  if (!value) throw httpError(400, 'Enter the discount amount.');
+  if (discount_type === 'percent' && value > 100) throw httpError(400, 'A percentage discount cannot be more than 100%.');
+  const vendor_phone = kind === 'coupon' ? normalizePhone(b.vendor_phone) : '';
+  if (kind === 'coupon' && (vendor_phone.length < 11 || vendor_phone.length > 15)) throw httpError(400, "Enter the vendor's WhatsApp number for this coupon.");
+  const valid_until = /^\d{4}-\d{2}-\d{2}$/.test(String(b.valid_until || '')) ? b.valid_until : null;
+  const event_id = b.event_id ? Number(b.event_id) : null;
+  if (event_id && !getEvent(event_id)) throw httpError(400, 'Event not found.');
+  return {
+    kind, discount_type, value, event_id, vendor_phone, valid_until,
+    max_discount: discount_type === 'percent' && b.max_discount ? intOr(b.max_discount, null) : null,
+    vendor_name: kind === 'coupon' ? str(b.vendor_name, 120) : '',
+    usage_limit: b.usage_limit === '' || b.usage_limit == null ? (kind === 'coupon' ? 1 : null) : (intOr(b.usage_limit, 0) || null),
+    note: str(b.note, 200),
+  };
+}
+app.post('/api/admin/promos', (req, res) => {
+  try {
+    const f = promoFields(req.body || {});
+    let code = str(req.body?.code, 20).toUpperCase().replace(/\s+/g, '');
+    if (!code) code = (f.kind === 'coupon' ? 'VIP-' : 'AES') + crypto.randomBytes(3).toString('hex').toUpperCase();
+    if (!/^[A-Z0-9-]{3,20}$/.test(code)) throw httpError(400, 'Codes can use letters, numbers and dashes (3–20 characters).');
+    if (db.prepare('SELECT 1 FROM promo_codes WHERE code=? COLLATE NOCASE').get(code)) throw httpError(409, `The code ${code} already exists.`);
+    const info = db.prepare(`INSERT INTO promo_codes(code,kind,discount_type,value,max_discount,event_id,vendor_name,vendor_phone,usage_limit,valid_until,note,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(code, f.kind, f.discount_type, f.value, f.max_discount, f.event_id, f.vendor_name, f.vendor_phone, f.usage_limit, f.valid_until, f.note, now());
+    res.json({ id: Number(info.lastInsertRowid), code });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.status ? e.message : 'Could not save the code.' });
+  }
+});
+app.post('/api/admin/promos/:id/toggle', (req, res) => {
+  const r = db.prepare('UPDATE promo_codes SET active = 1 - active WHERE id=?').run(Number(req.params.id));
+  if (!r.changes) return res.status(404).json({ error: 'Code not found.' });
+  res.json({ ok: true });
+});
+app.delete('/api/admin/promos/:id', (req, res) => {
+  const p = db.prepare('SELECT * FROM promo_codes WHERE id=?').get(Number(req.params.id));
+  if (!p) return res.status(404).json({ error: 'Code not found.' });
+  if (codeUses(p.code)) return res.status(409).json({ error: 'This code is on an active booking. Disable it instead.' });
+  db.prepare('DELETE FROM promo_codes WHERE id=?').run(p.id);
+  res.json({ ok: true });
+});
+
+// ----- membership cards
+app.get('/api/admin/members', (req, res) => {
+  res.json(db.prepare('SELECT * FROM members ORDER BY created_at DESC').all().map(m => ({ ...m, state: memberStatus(m) })));
+});
+app.post('/api/admin/members', (req, res) => {
+  const b = req.body || {};
+  const name = str(b.name, 80), business_name = str(b.business_name, 120), phone = normalizePhone(b.phone);
+  if (!name) return res.status(400).json({ error: "Enter the vendor's name for the card." });
+  if (phone && (phone.length < 11 || phone.length > 15)) return res.status(400).json({ error: 'Enter a valid WhatsApp number (or leave it blank).' });
+  if (phone) {
+    const dup = db.prepare(`SELECT * FROM members WHERE phone=? AND status='active' AND expires_on >= ?`).get(phone, istToday());
+    if (dup) return res.status(409).json({ error: `${dup.name} already has an active membership card (${dup.member_no}).` });
+  }
+  const issued = istToday();
+  const m = { member_no: newMemberNo(), token: crypto.randomBytes(12).toString('base64url'), issued_on: issued, expires_on: plusOneYear(issued) };
+  const info = db.prepare(`INSERT INTO members(member_no,token,name,business_name,phone,issued_on,expires_on,booking_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)`)
+    .run(m.member_no, m.token, name, business_name, phone, m.issued_on, m.expires_on, b.booking_id ? Number(b.booking_id) : null, now());
+  res.json({ id: Number(info.lastInsertRowid), ...m });
+});
+app.post('/api/admin/members/:id/:action(revoke|restore|renew)', (req, res) => {
+  const m = db.prepare('SELECT * FROM members WHERE id=?').get(Number(req.params.id));
+  if (!m) return res.status(404).json({ error: 'Member not found.' });
+  if (req.params.action === 'revoke') db.prepare(`UPDATE members SET status='revoked' WHERE id=?`).run(m.id);
+  if (req.params.action === 'restore') db.prepare(`UPDATE members SET status='active' WHERE id=?`).run(m.id);
+  if (req.params.action === 'renew') {
+    const issued = istToday();
+    db.prepare(`UPDATE members SET status='active', issued_on=?, expires_on=? WHERE id=?`).run(issued, plusOneYear(issued), m.id);
+  }
+  res.json({ ok: true });
+});
 
 app.get('/api/admin/notifications', (req, res) => {
   const items = db.prepare('SELECT * FROM notifications ORDER BY id DESC LIMIT 50').all();
   const unread = db.prepare('SELECT COUNT(*) c FROM notifications WHERE is_read=0').get().c;
-  const pending = db.prepare(`SELECT COUNT(*) c FROM bookings WHERE status='pending'`).get().c;
+  const pending = db.prepare(`SELECT COUNT(*) c FROM bookings WHERE status='pending' OR (status='approved' AND cancel_requested_at IS NOT NULL)`).get().c;
   res.json({ items, unread, pending });
 });
 app.post('/api/admin/notifications/read', (req, res) => {

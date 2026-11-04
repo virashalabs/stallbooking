@@ -27,7 +27,7 @@ $('#logout').addEventListener('click', async () => { await api('/api/admin/logou
 
 // ------------------------------------------------------------------ tabs
 function showTab(tab) {
-  if (!['dash', 'events', 'bookings', 'settings'].includes(tab)) tab = 'dash';
+  if (!['dash', 'events', 'bookings', 'promos', 'members', 'settings'].includes(tab)) tab = 'dash';
   currentTab = tab;
   history.replaceState(null, '', '#' + tab);
   $$('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
@@ -35,9 +35,12 @@ function showTab(tab) {
   if (tab === 'dash') loadDash();
   if (tab === 'events') { closeEditor(); loadEvents(); }
   if (tab === 'bookings') loadBookings();
+  if (tab === 'promos') loadPromos();
+  if (tab === 'members') loadMembers();
   if (tab === 'settings') loadSettings();
 }
 $$('.tabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+window.addEventListener('hashchange', () => { if (!$('#app').classList.contains('hidden') && location.hash.slice(1) !== currentTab) showTab(location.hash.slice(1)); });
 
 // ------------------------------------------------------------------ notifications
 async function pollNotifications() {
@@ -71,24 +74,40 @@ $('#bell').addEventListener('click', async e => {
 document.addEventListener('click', e => { if (!e.target.closest('#notif-panel')) $('#notif-panel').classList.add('hidden'); });
 
 // ------------------------------------------------------------------ booking cards
+const fmtDay = ms => new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtDate = ymd => ymd ? new Date(ymd + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+const waTo = (phone, text) => `https://wa.me/${String(phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
+const waAny = text => `https://wa.me/?text=${encodeURIComponent(text)}`;
+const live = b => ['pending', 'approved'].includes(b.status);
+const cancelReq = b => b.cancel_requested_at && live(b);
+
 function bookingCard(b) {
   const acts = [];
+  const paid = b.paid_at && b.amount > 0 && ['cancelled', 'rejected'].includes(b.status);
+  if (cancelReq(b)) acts.push(`<button class="btn danger sm" data-act="cancel" data-id="${b.id}">Confirm cancellation</button>`);
   if (['pending', 'held'].includes(b.status)) acts.push(`<button class="btn green sm" data-act="approve" data-id="${b.id}">✓ Approve</button>`);
-  if (['pending', 'held'].includes(b.status)) acts.push(`<button class="btn danger sm" data-act="reject" data-id="${b.id}">Reject</button>`);
-  if (b.status === 'approved') acts.push(`<button class="btn danger sm" data-act="reject" data-id="${b.id}">Release stall</button>`);
+  if (['pending', 'held'].includes(b.status) && !cancelReq(b)) acts.push(`<button class="btn danger sm" data-act="reject" data-id="${b.id}">Reject</button>`);
+  if (b.status === 'approved' && !cancelReq(b)) acts.push(`<button class="btn danger sm" data-act="cancel" data-id="${b.id}">Cancel booking</button>`);
+  if (paid && !b.refunded_at) acts.push(`<button class="btn green sm" data-act="refund" data-id="${b.id}">Mark refunded</button>`);
+  if (b.status === 'approved') acts.push(`<button class="btn gold sm" data-act="member" data-id="${b.id}">🎖️ Issue membership card</button>`);
   acts.push(`<a class="btn wa sm" href="${esc(b.wa_vendor)}" target="_blank" rel="noopener">WhatsApp vendor</a>`);
   if (b.wa_organizer) acts.push(`<a class="btn ghost sm" href="${esc(b.wa_organizer)}" target="_blank" rel="noopener" title="Send these vendor details to your own WhatsApp">Send details to my WhatsApp</a>`);
   acts.push(`<button class="btn ghost sm" data-act="copy" data-id="${b.id}">Copy details</button>`);
   return `<div class="bk ${b.status}">
     <div>
-      <div class="row" style="gap:8px;margin-bottom:4px"><h3>Stall ${esc(b.stall_label)} · ${esc(b.business_name)}</h3>${statusBadge(b.status)}${b.corner_amount ? '<span class="badge red">★ Corner</span>' : ''}</div>
+      <div class="row" style="gap:8px;margin-bottom:4px"><h3>Stall ${esc(b.stall_label)} · ${esc(b.business_name)}</h3>${statusBadge(b.status)}${cancelReq(b) ? '<span class="badge amber">Cancellation requested</span>' : ''}${b.corner_amount ? '<span class="badge red">★ Corner</span>' : ''}</div>
       <div class="small"><b>${esc(b.event_title)}</b> · AESE-${b.id}</div>
       <div class="small" style="margin-top:6px">🛍️ ${esc(b.products)}</div>
       <div class="small muted" style="margin-top:4px">👤 ${esc(b.contact_name)} · 📱 +${esc(b.phone)}${b.email ? ' · ✉️ ' + esc(b.email) : ''}</div>
+      ${cancelReq(b) ? `<div class="alert ${b.refund_eligible ? 'info' : ''} small" style="margin:8px 0">↺ Requested ${ago(b.cancel_requested_at)}${b.cancel_reason ? ` · “${esc(b.cancel_reason)}”` : ''}<br>
+        ${b.refund_eligible ? `<b>Eligible for full refund</b> (${money(b.amount)}) — requested before ${fmtDay(b.refund_deadline)}` : '<b>Not eligible for refund</b> — requested less than 7 days before the event'}</div>` : ''}
       <div class="small" style="margin-top:6px"><b>${money(b.amount)}</b>${b.corner_amount ? ` <span class="muted">(${money(b.base_amount)} + ${money(b.corner_amount)} corner)</span>` : ''}
+        ${b.promo_discount ? ` <span class="badge green">${esc(b.promo_code)} −${money(b.promo_discount)}</span>` : ''}${b.coupon_discount ? ` <span class="badge green">${esc(b.coupon_code)} −${money(b.coupon_discount)}</span>` : ''}
         ${b.utr ? ` · UTR <b>${esc(b.utr)}</b>` : ''}
         <span class="muted"> · ${b.paid_at ? 'paid ' + ago(b.paid_at) : 'requested ' + ago(b.created_at)}</span></div>
       ${b.admin_note ? `<div class="small muted">Note: ${esc(b.admin_note)}</div>` : ''}
+      ${live(b) && b.refund_deadline && !cancelReq(b) ? `<div class="small muted">${Date.now() <= b.refund_deadline ? `Free cancellation until ${fmtDay(b.refund_deadline)}` : 'Non-refundable now (less than 7 days to the event)'}</div>` : ''}
+      ${paid ? `<div class="small" style="margin-top:4px">${b.refunded_at ? `✓ Refunded <b>${money(b.refund_amount)}</b> on ${fmtDay(b.refunded_at)}` : b.refund_eligible === 0 ? '<span class="muted">Cancelled after the refund window — not refundable under the policy</span>' : `<b style="color:var(--amber)">Refund due: ${money(b.amount)}</b>`}</div>` : ''}
     </div>
     <div class="acts">${acts.join('')}</div>
   </div>`;
@@ -109,6 +128,36 @@ function wireBookingActions(root, reload) {
         toast(`Stall ${b.stall_label} assigned to ${b.business_name}`, 'ok');
       } catch (e) { toast(e.message, 'error'); }
     }
+    if (btn.dataset.act === 'cancel') {
+      const elig = b.refund_eligible ?? (b.refund_deadline && Date.now() <= b.refund_deadline ? 1 : 0);
+      const note = prompt(`Cancel stall ${b.stall_label} for ${b.business_name}? The stall becomes available again.\n\n${elig ? `Refund: eligible for full refund of ${money(b.amount)}.` : 'Refund: not eligible (less than 7 days before the event), at your discretion.'}\n\nNote to vendor (optional):`, '');
+      if (note === null) return;
+      try {
+        await api(`/api/admin/bookings/${b.id}/cancel`, { method: 'POST', body: { note } });
+        toast('Booking cancelled — stall released', 'ok');
+        const msg = `Hi ${b.contact_name}, your stall ${b.stall_label} booking for "${b.event_title}" (AESE-${b.id}) has been cancelled.${b.paid_at ? (elig ? ` You are eligible for a full refund of ${money(b.amount)}, which will be processed within 7–10 working days.` : ' As the cancellation was within 7 days of the event, it is not eligible for a refund under our policy.') : ''}${note ? `\nNote: ${note}` : ''}\n— Auto Expo Suburban Events`;
+        if (confirm('Send the cancellation update to the vendor on WhatsApp?')) open(waTo(b.phone, msg), '_blank', 'noopener');
+      } catch (e) { toast(e.message, 'error'); }
+    }
+    if (btn.dataset.act === 'refund') {
+      const v = prompt(`Refund amount for ${b.business_name} (AESE-${b.id}) in ₹:`, String(b.refund_eligible === 0 ? 0 : b.amount));
+      if (v === null) return;
+      const amount = Math.max(0, Math.round(Number(v) || 0));
+      try {
+        await api(`/api/admin/bookings/${b.id}/refund`, { method: 'POST', body: { amount } });
+        toast(`Refund of ${money(amount)} recorded`, 'ok');
+        if (amount && confirm('Let the vendor know on WhatsApp?')) open(waTo(b.phone, `Hi ${b.contact_name}, a refund of ${money(amount)} for your stall booking AESE-${b.id} ("${b.event_title}") has been processed. It should reflect in your account shortly.\n— Auto Expo Suburban Events`), '_blank', 'noopener');
+      } catch (e) { toast(e.message, 'error'); }
+    }
+    if (btn.dataset.act === 'member') {
+      if (!confirm(`Issue a membership card to ${b.contact_name} (${b.business_name})? Valid for 1 year from today.`)) return;
+      try {
+        const m = await api('/api/admin/members', { method: 'POST', body: { name: b.contact_name, business_name: b.business_name, phone: b.phone, booking_id: b.id } });
+        toast(`Membership card ${m.member_no} issued`, 'ok');
+        shareCard({ ...m, name: b.contact_name, phone: b.phone });
+      } catch (e) { toast(e.message, 'error'); }
+      return;
+    }
     if (btn.dataset.act === 'reject') {
       const note = prompt(`${b.status === 'approved' ? 'Release' : 'Reject'} stall ${b.stall_label} for ${b.business_name}? The stall becomes available again.\n\nReason (shown to vendor, optional):`, '');
       if (note === null) return;
@@ -126,9 +175,11 @@ async function loadDash() {
   events = evs;
   bookings.forEach(b => bookingCache.set(b.id, b));
   const approved = bookings.filter(b => b.status === 'approved');
-  const pending = bookings.filter(b => b.status === 'pending');
+  const pending = bookings.filter(b => b.status === 'pending' && !b.cancel_requested_at);
+  const cancels = bookings.filter(cancelReq);
   $('#stats').innerHTML = [
     ['Awaiting approval', pending.length],
+    ...(cancels.length ? [['Cancellation requests', cancels.length]] : []),
     ['Stalls confirmed', approved.length],
     ['Confirmed revenue', money(approved.reduce((a, b) => a + b.amount, 0))],
     ['Live events', evs.filter(e => e.status === 'published').length],
@@ -142,6 +193,9 @@ async function loadDash() {
   const list = $('#pending-list');
   list.innerHTML = pending.length ? pending.map(bookingCard).join('') : '<div class="card empty">No payments waiting for approval. 🎉</div>';
   wireBookingActions(list, loadDash);
+  $('#cancel-wrap').classList.toggle('hidden', !cancels.length);
+  $('#cancel-list').innerHTML = cancels.map(bookingCard).join('');
+  wireBookingActions($('#cancel-list'), loadDash);
 }
 
 // ------------------------------------------------------------------ bookings tab
@@ -428,6 +482,137 @@ $('#save-stalls').addEventListener('click', async () => {
   } catch (e) { toast(e.message, 'error'); }
 });
 window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+// ------------------------------------------------------------------ promo codes & coupons
+const pf = $('#promo-form');
+function syncPromoForm() {
+  const coupon = pf.kind.value === 'coupon';
+  $$('.coupon-only', pf).forEach(el => el.classList.toggle('hidden', !coupon));
+  $$('.pct-only', pf).forEach(el => el.classList.toggle('hidden', pf.discount_type.value !== 'percent'));
+  $('#pc-vphone').required = coupon;
+  $('#pc-limit').placeholder = coupon ? '1' : 'Unlimited';
+  $('#pc-limit-hint').textContent = coupon ? 'Coupons are single-use by default.' : 'Number of bookings that can use it.';
+}
+pf.addEventListener('change', syncPromoForm);
+$('#pc-gen').addEventListener('click', () => {
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const rnd = n => Array.from(crypto.getRandomValues(new Uint8Array(n)), x => abc[x % abc.length]).join('');
+  $('#pc-code').value = (pf.kind.value === 'coupon' ? 'VIP-' : 'AES') + rnd(6);
+});
+pf.addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(pf).entries());
+  try {
+    const r = await api('/api/admin/promos', { method: 'POST', body });
+    toast(`Code ${r.code} created`, 'ok');
+    pf.reset(); syncPromoForm();
+    await loadPromos();
+    const p = promoCache.get(r.id);
+    if (p && body.kind === 'coupon' && confirm(`Send coupon ${r.code} to ${p.vendor_name || 'the vendor'} on WhatsApp now?`)) open(shareCode(p), '_blank', 'noopener');
+  } catch (err) { toast(err.message, 'error'); }
+});
+
+let promoCache = new Map();
+function codeMessage(p) {
+  const scope = p.event_title ? `for "${p.event_title}"` : 'on any of our events';
+  const till = p.valid_until ? ` Valid till ${fmtDate(p.valid_until)}.` : '';
+  const link = `${location.origin}/${p.event_id ? `event.html?id=${p.event_id}` : ''}`;
+  return p.kind === 'coupon'
+    ? `Hi${p.vendor_name ? ' ' + p.vendor_name : ''}! 🎉 Here's a special coupon just for you from Auto Expo Suburban Events.\n\nCoupon: *${p.code}*\nExtra discount: ${p.describe} ${scope}.${till}\n\nBook your stall using this WhatsApp number and apply the coupon on the payment step. It works along with any promo code.\n${link}`
+    : `🎉 Book your stall with Auto Expo Suburban Events and save!\n\nPromo code: *${p.code}*\nDiscount: ${p.describe} ${scope}.${till}\n\nApply the code on the payment step.\n${link}`;
+}
+const shareCode = p => p.kind === 'coupon' ? waTo(p.vendor_phone, codeMessage(p)) : waAny(codeMessage(p));
+
+async function loadPromos() {
+  if (!events.length) events = await api('/api/admin/events');
+  const sel = $('#pc-event'), keep = sel.value;
+  sel.innerHTML = '<option value="">All events</option>' + events.map(e => `<option value="${e.id}">${esc(e.title)}</option>`).join('');
+  sel.value = keep;
+  syncPromoForm();
+  const rows = await api('/api/admin/promos');
+  promoCache = new Map(rows.map(p => [p.id, p]));
+  const list = $('#promo-list');
+  list.innerHTML = rows.length ? rows.map(p => {
+    const used = p.usage_limit && p.uses >= p.usage_limit;
+    const ok = p.active && !p.expired && !used;
+    const state = !p.active ? ['Disabled', 'grey'] : p.expired ? ['Expired', 'grey'] : used ? ['Used up', 'grey'] : ['Active', 'green'];
+    return `<div class="bk ${ok ? 'approved' : 'expired'}">
+      <div>
+        <div class="row" style="gap:8px;margin-bottom:4px"><h3 class="code-name">${esc(p.code)}</h3>
+          <span class="badge ${p.kind === 'coupon' ? 'amber' : 'blue'}">${p.kind === 'coupon' ? 'Vendor coupon' : 'Promo code'}</span><span class="badge ${state[1]}">${state[0]}</span></div>
+        <div class="small"><b>${esc(p.describe)}</b> · ${p.event_title ? esc(p.event_title) : 'All events'}${p.valid_until ? ` · till ${fmtDate(p.valid_until)}` : ''}</div>
+        ${p.kind === 'coupon' ? `<div class="small muted" style="margin-top:4px">👤 ${esc(p.vendor_name || 'Vendor')} · 📱 +${esc(p.vendor_phone)}</div>` : ''}
+        <div class="small muted" style="margin-top:4px">Used ${p.uses}${p.usage_limit ? ` of ${p.usage_limit}` : ''} time${p.uses === 1 ? '' : 's'}${p.note ? ` · ${esc(p.note)}` : ''}</div>
+      </div>
+      <div class="acts">
+        <a class="btn wa sm" href="${esc(shareCode(p))}" target="_blank" rel="noopener">${p.kind === 'coupon' ? 'Send to vendor on WhatsApp' : 'Share on WhatsApp'}</a>
+        <button class="btn ghost sm" data-pact="copy" data-id="${p.id}">Copy message</button>
+        <button class="btn ghost sm" data-pact="toggle" data-id="${p.id}">${p.active ? 'Disable' : 'Enable'}</button>
+        <button class="btn danger sm" data-pact="delete" data-id="${p.id}">Delete</button>
+      </div></div>`;
+  }).join('') : '<div class="card empty">No codes yet. Create a promo code for everyone, or a coupon for a specific vendor.</div>';
+  list.querySelectorAll('[data-pact]').forEach(btn => btn.addEventListener('click', async () => {
+    const p = promoCache.get(Number(btn.dataset.id));
+    try {
+      if (btn.dataset.pact === 'copy') {
+        try { await navigator.clipboard.writeText(codeMessage(p)); toast('Message copied', 'ok'); } catch { prompt('Copy the message:', codeMessage(p)); }
+        return;
+      }
+      if (btn.dataset.pact === 'toggle') await api(`/api/admin/promos/${p.id}/toggle`, { method: 'POST' });
+      if (btn.dataset.pact === 'delete') {
+        if (!confirm(`Delete code ${p.code}?`)) return;
+        await api(`/api/admin/promos/${p.id}`, { method: 'DELETE' });
+      }
+      loadPromos();
+    } catch (e) { toast(e.message, 'error'); }
+  }));
+}
+
+// ------------------------------------------------------------------ membership cards
+const cardUrl = m => `${location.origin}/card.html?n=${encodeURIComponent(m.member_no)}&t=${encodeURIComponent(m.token)}`;
+const cardMessage = m => `Hi ${m.name}! 🎖️ Welcome to the Auto Expo Suburban Events family.\n\nYour virtual Membership Card is ready.\nMembership No: *${m.member_no}*\nValid: ${fmtDate(m.issued_on)} – ${fmtDate(m.expires_on)}\n\nView / download your card: ${cardUrl(m)}`;
+function shareCard(m) {
+  if (m.phone) { if (confirm('Send the membership card to the vendor on WhatsApp?')) open(waTo(m.phone, cardMessage(m)), '_blank', 'noopener'); }
+  else open(cardUrl(m), '_blank', 'noopener');
+}
+$('#member-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(e.target).entries());
+  try {
+    const m = await api('/api/admin/members', { method: 'POST', body });
+    toast(`Membership card ${m.member_no} issued`, 'ok');
+    e.target.reset();
+    await loadMembers();
+    const row = memberCache.get(m.id);
+    shareCard(row || { ...m, name: body.name });
+  } catch (err) { toast(err.message, 'error'); }
+});
+let memberCache = new Map();
+async function loadMembers() {
+  const rows = await api('/api/admin/members');
+  memberCache = new Map(rows.map(m => [m.id, m]));
+  const list = $('#member-list');
+  const st = { active: ['Active', 'green'], expired: ['Expired', 'grey'], revoked: ['Revoked', 'red'] };
+  list.innerHTML = rows.length ? rows.map(m => `<div class="bk ${m.state === 'active' ? 'approved' : 'expired'}">
+    <div>
+      <div class="row" style="gap:8px;margin-bottom:4px"><h3>${esc(m.name)}</h3><span class="badge ${st[m.state][1]}">${st[m.state][0]}</span></div>
+      <div class="small"><b class="code-name">${esc(m.member_no)}</b>${m.business_name ? ` · ${esc(m.business_name)}` : ''}</div>
+      <div class="small muted" style="margin-top:4px">Issued ${fmtDate(m.issued_on)} · Expires ${fmtDate(m.expires_on)}${m.phone ? ` · 📱 +${esc(m.phone)}` : ''}</div>
+    </div>
+    <div class="acts">
+      <a class="btn gold sm" href="${esc(cardUrl(m))}" target="_blank" rel="noopener">View card</a>
+      ${m.phone ? `<a class="btn wa sm" href="${esc(waTo(m.phone, cardMessage(m)))}" target="_blank" rel="noopener">Send on WhatsApp</a>` : ''}
+      <button class="btn ghost sm" data-mact="renew" data-id="${m.id}">Renew 1 year</button>
+      <button class="btn ${m.status === 'revoked' ? 'ghost' : 'danger'} sm" data-mact="${m.status === 'revoked' ? 'restore' : 'revoke'}" data-id="${m.id}">${m.status === 'revoked' ? 'Restore' : 'Revoke'}</button>
+    </div></div>`).join('') : '<div class="card empty">No members yet. Issue a card here, or from a confirmed booking.</div>';
+  list.querySelectorAll('[data-mact]').forEach(btn => btn.addEventListener('click', async () => {
+    const act = btn.dataset.mact;
+    if (act === 'revoke' && !confirm('Revoke this membership card? It will show as revoked when opened.')) return;
+    if (act === 'renew' && !confirm('Renew this card for 1 year from today?')) return;
+    try { await api(`/api/admin/members/${btn.dataset.id}/${act}`, { method: 'POST' }); toast('Membership updated', 'ok'); loadMembers(); }
+    catch (e) { toast(e.message, 'error'); }
+  }));
+}
 
 // ------------------------------------------------------------------ settings
 async function loadSettings() {

@@ -42,3 +42,24 @@ export const PATRONS = [
 ].map(([f, name]) => ({ src: `/img/patrons/${f}`, name }));
 
 export const POSTERS = ['01.jpg', '02.jpg', '03.jpg', '04.jpg', '05.jpg', '06.jpg'].map(f => `/img/posters/${f}`);
+
+// Cancellation & Refund Policy — shown at checkout, on bookings and on /policy.html.
+export const REFUND_DAYS = 7;
+export const POLICY = [
+  ['Full refund window', 'Cancellations notified to the organizer at least 7 days before the event start date are eligible for a full refund of the amount paid.'],
+  ['No refund after the window', 'Cancellations notified less than 7 days before the event, and no-shows on the event day, are not eligible for any refund.'],
+  ['How to cancel', 'Use "Request cancellation" on your booking page, or message the organizer on WhatsApp (98400 49879) with your Booking ID. The date and time your request reaches us decides whether you are eligible for a refund.'],
+  ['Refund amount & timeline', 'Refunds cover the amount actually paid (after any promo code or coupon discount) and are sent to the UPI account you paid from, normally within 7–10 working days of the cancellation being confirmed.'],
+  ['If the event is cancelled or rescheduled', 'If the organizer cancels the event, you receive a full refund. If it is rescheduled, you can move your booking to the new date or ask for a full refund.'],
+  ['Bookings not approved', 'If your payment cannot be verified or your booking is not approved, the full amount you paid is refunded.'],
+  ['Transfers & stall changes', 'Bookings cannot be transferred to another vendor. Changing to a different stall depends on availability and the organizer\'s approval.'],
+  ['Vendor conduct', 'The organizer may cancel a booking without a refund for prohibited products, misrepresentation of the business or misconduct at the venue.'],
+  ["Organizer's discretion", 'All cancellations and refunds are at the sole and final discretion of the organizer, Auto Expo Suburban Events.'],
+];
+// Last date (inclusive, local) for a full refund — 7 days before the event starts.
+export function refundDeadline(startAt) {
+  if (!startAt) return null;
+  const d = new Date(startAt);
+  if (isNaN(d)) return null;
+  return new Date(d.getTime() - REFUND_DAYS * 864e5);
+}

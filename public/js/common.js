@@ -72,7 +72,9 @@ export function forgetBookings(ids) {
   } catch { /* storage unavailable */ }
 }
 // Bookings that no longer hold a stall — hidden from "My bookings".
+// A paid booking that was cancelled stays visible so the vendor can follow the refund.
 export const GONE = ['expired', 'cancelled'];
+export const isGone = b => b.status === 'expired' || (b.status === 'cancelled' && !b.paid_at);
 
 export const STATUS = {
   held: ['Awaiting payment', 'amber'],
@@ -152,6 +154,7 @@ export function footer() {
       <div><h4>Explore</h4><div class="small" style="display:flex;flex-direction:column;gap:3px">
         <a href="/#events">Upcoming events</a><a href="/about.html">About us</a>
         <a href="/about.html#venues">Corporate venues</a><a href="/about.html#patrons">Our patrons</a>
+        <a href="/policy.html">Cancellation &amp; refund policy</a>
         <a href="/admin.html">Organizer login</a></div></div>
     </div>
     <div class="copy small muted">© ${new Date().getFullYear()} AUTO EXPO SUBURBAN EVENTS · All rights reserved.</div>

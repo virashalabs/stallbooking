@@ -130,7 +130,7 @@ footer { color: var(--muted); font-size: .85rem; padding: 28px 0; text-align: ce
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field label { font-weight: 600; font-size: .88rem; color: var(--label); }
 .field .hint { font-size: .8rem; color: var(--muted); }
-input[type=text], input[type=tel], input[type=email], input[type=number], input[type=password], input[type=datetime-local], select, textarea {
+input[type=text], input[type=tel], input[type=email], input[type=number], input[type=password], input[type=datetime-local], input[type=date], select, textarea {
   font: inherit; padding: 10px 12px; border: 1px solid var(--input-line); border-radius: 10px; background: var(--input-bg); color: var(--text); width: 100%;
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid rgba(37,99,235,.35); border-color: var(--blue); }
@@ -397,3 +397,41 @@ textarea { min-height: 84px; resize: vertical; }
 .seat:not(:disabled):hover .sicon { transform: translateY(-2px) scale(1.06); }
 .seat:disabled .sicon { filter: grayscale(1); opacity: .4; }
 .seat.selected .sicon { filter: drop-shadow(0 0 6px rgba(255,255,255,.55)); }
+
+/* ---------- cancellation & refund policy */
+.policy-box { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; padding: 12px 14px; border-radius: 10px;
+  background: var(--surface-2, var(--grey-soft)); border: 1px solid var(--line); font-size: .88rem; }
+.policy-box .check { margin-top: 4px; font-size: .88rem; }
+.policy-box .check input { width: 18px; height: 18px; flex: none; }
+.policy-card { max-width: 820px; margin: 0 auto; }
+.policy-list { padding-left: 22px; display: flex; flex-direction: column; gap: 12px; line-height: 1.55; }
+.policy-list b { color: var(--heading); }
+
+/* ---------- promo codes at checkout */
+.code-box { margin-top: 16px; padding: 14px; border: 1px dashed var(--input-line); border-radius: 12px; }
+.code-box label { display: block; margin-bottom: 8px; }
+.code-box input { flex: 1; min-width: 0; }
+.code-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: 999px;
+  background: var(--green-soft); color: var(--green-ink); font-size: .85rem; }
+.code-chip button { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: .9rem; padding: 2px 6px; border-radius: 50%; }
+.code-chip button:hover { background: rgba(0,0,0,.08); }
+.saved { color: var(--green-ink); font-weight: 700; margin: -4px 0 0; }
+dd.discount { color: var(--green-ink); font-weight: 600; }
+.code-name { font-family: ui-monospace, Consolas, monospace; letter-spacing: .04em; }
+
+/* segmented choice (promo vs coupon) */
+.seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.seg label { cursor: pointer; position: relative; }
+.seg input { position: absolute; opacity: 0; }
+.seg span { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 2px solid var(--line); border-radius: 12px; }
+.seg small { color: var(--muted); }
+.seg input:checked + span { border-color: var(--blue); background: var(--blue-soft); }
+.seg input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* ---------- membership card */
+.btn.gold { background: linear-gradient(135deg, #a37b26, #f3d98b 45%, #c9a13b); color: #1a1408; }
+.btn.gold:hover { filter: brightness(1.06); }
+.card-page { max-width: 760px; }
+.member-card-wrap { border-radius: 22px; box-shadow: 0 18px 40px rgba(0,0,0,.35); overflow: hidden; line-height: 0; }
+.member-card-wrap canvas { width: 100%; height: auto; display: block; }
+.card-actions { justify-content: center; margin: 22px 0 10px; }

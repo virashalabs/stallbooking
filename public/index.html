@@ -51,7 +51,7 @@
   <footer></footer>
 
   <script type="module">
-    import { $, $$, api, esc, money, fmtRange, header, myBookings, forgetBookings, GONE, statusBadge, VENUE_TYPES, toast } from '/js/common.js';
+    import { $, $$, api, esc, money, fmtRange, header, myBookings, forgetBookings, isGone, statusBadge, VENUE_TYPES, toast } from '/js/common.js';
     import { PATRONS, VENUES } from '/js/site-data.js';
     header('events');
 
@@ -148,12 +148,12 @@
     const checked = await Promise.all(saved.map(async b => {
       try {
         const d = await api(`/api/bookings/${b.id}?t=${encodeURIComponent(b.token)}`);
-        return { ...b, status: d.booking.status };
+        return { ...b, status: d.booking.status, paid_at: d.booking.paid_at };
       } catch (e) {
         return e.status === 404 ? { ...b, status: 'missing' } : { ...b, status: null };
       }
     }));
-    const gone = checked.filter(b => GONE.includes(b.status) || b.status === 'missing').map(b => b.id);
+    const gone = checked.filter(b => (b.status && isGone(b)) || b.status === 'missing').map(b => b.id);
     if (gone.length) forgetBookings(gone);
     const mine = checked.filter(b => !gone.includes(b.id));
     if (mine.length) {

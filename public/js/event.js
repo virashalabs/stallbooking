@@ -1,4 +1,5 @@
 import { $, $$, api, esc, money, fmtRange, header, renderStage, toast, rememberBooking, VENUE_TYPES } from '/js/common.js';
+import { refundDeadline } from '/js/site-data.js';
 header('events');
 
 const id = new URLSearchParams(location.search).get('id');
@@ -78,6 +79,16 @@ function pick(stall) {
   drawSummary();
 }
 
+let agreed = false;
+function deadlineText(ev) {
+  const d = refundDeadline(ev.start_at);
+  if (!d) return 'Full refund if you cancel at least 7 days before the event. No refund after that.';
+  const day = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  return d.getTime() >= Date.now()
+    ? `Full refund if you cancel on or before ${day} (7 days before the event). No refund after that.`
+    : `The event is less than 7 days away, so this booking is non-refundable once paid.`;
+}
+
 function drawSummary() {
   const btn = $('#reserve'), bar = $('#bar');
   if (!selected) {
@@ -93,7 +104,15 @@ function drawSummary() {
     <div class="summary-row"><span class="muted">Stall</span><b>${esc(s.label)}${s.is_corner ? ' <span class="badge red">★ Corner</span>' : ''}</b></div>
     <div class="summary-row"><span class="muted">Stall rent</span><span>${money(s.base)}</span></div>
     ${s.corner ? `<div class="summary-row"><span class="muted">Corner charge</span><span>+ ${money(s.corner)}</span></div>` : ''}
-    <div class="summary-row total"><span>Total</span><span>${money(s.total)}</span></div>`;
+    <div class="summary-row total"><span>Total</span><span>${money(s.total)}</span></div>
+    <p class="muted small" style="margin:8px 0 0">🏷️ Have a promo code or coupon? Apply it on the payment step.</p>
+    <div class="policy-box">
+      <b>Cancellation &amp; refund</b>
+      <span>${deadlineText(ev)}</span>
+      <label class="check"><input type="checkbox" id="agree" ${agreed ? 'checked' : ''}> I agree to the <a href="/policy.html" target="_blank" rel="noopener">Cancellation &amp; Refund Policy</a></label>
+    </div>`;
+  $('#agree').addEventListener('change', e => { agreed = e.target.checked; $('#reserve').disabled = !agreed; });
+  btn.disabled = !agreed;
   btn.classList.remove('hidden');
   $('#hold-note').textContent = `We'll hold stall ${s.label} for you for ${data.site.hold_minutes} minutes while you complete the payment.`;
   $('#hold-note').classList.remove('hidden');
@@ -142,10 +161,15 @@ $('#edit-details').addEventListener('click', () => {
 
 async function reserve() {
   if (!selected || busy) return;
+  if (!agreed) {
+    toast('Please accept the Cancellation & Refund Policy to continue.', 'error');
+    $('#summary').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
   busy = true;
   $('#reserve').disabled = $('#bar-btn').disabled = true;
   try {
-    const r = await api(`/api/events/${encodeURIComponent(id)}/hold`, { method: 'POST', body: { ...details, stall_id: selected.id } });
+    const r = await api(`/api/events/${encodeURIComponent(id)}/hold`, { method: 'POST', body: { ...details, stall_id: selected.id, accept_policy: true } });
     rememberBooking({ id: r.booking_id, token: r.token, stall: selected.label, event: data.event.title, business: details.business_name });
     location.href = `/booking.html?id=${r.booking_id}&t=${encodeURIComponent(r.token)}`;
   } catch (e) {

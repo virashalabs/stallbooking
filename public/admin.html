@@ -39,12 +39,18 @@
         <button data-tab="dash" class="on">Dashboard <span class="count hidden" id="pending-count"></span></button>
         <button data-tab="events">Events</button>
         <button data-tab="bookings">Bookings</button>
+        <button data-tab="promos">Promo codes</button>
+        <button data-tab="members">Members</button>
         <button data-tab="settings">Settings</button>
       </div>
 
       <section data-panel="dash">
         <div id="setup-alerts"></div>
         <div class="stats" id="stats"></div>
+        <div id="cancel-wrap" class="hidden">
+          <h2>Cancellation requests</h2>
+          <div class="list" id="cancel-list" style="margin-bottom:24px"></div>
+        </div>
         <h2>Awaiting your approval</h2>
         <div class="list" id="pending-list"></div>
       </section>
@@ -110,11 +116,55 @@
         <div class="row" style="margin-bottom:16px">
           <select id="bf-event" style="max-width:280px"><option value="">All events</option></select>
           <select id="bf-status" style="max-width:220px">
-            <option value="">All statuses</option><option value="pending">Pending approval</option><option value="approved">Confirmed</option>
+            <option value="">All statuses</option><option value="cancel_requested">Cancellation requested</option><option value="pending">Pending approval</option><option value="approved">Confirmed</option>
             <option value="held">Awaiting payment</option><option value="rejected">Rejected</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option>
           </select>
         </div>
         <div class="list" id="bookings-list"></div>
+      </section>
+
+      <section data-panel="promos" class="hidden">
+        <form class="card" id="promo-form" style="margin-bottom:20px">
+          <h2>Create a discount code</h2>
+          <div class="seg" role="radiogroup" aria-label="Code type">
+            <label><input type="radio" name="kind" value="promo" checked><span><b>Promo code</b><small>Any vendor can use it</small></span></label>
+            <label><input type="radio" name="kind" value="coupon"><span><b>Vendor coupon</b><small>Special extra discount for one vendor</small></span></label>
+          </div>
+          <div class="grid2">
+            <div class="field"><label for="pc-code">Code</label>
+              <div class="row" style="flex-wrap:nowrap"><input id="pc-code" name="code" type="text" maxlength="20" placeholder="Leave blank to auto-generate" style="text-transform:uppercase"><button class="btn ghost sm" type="button" id="pc-gen">Generate</button></div>
+              <span class="hint">Letters, numbers and dashes, e.g. DIWALI10.</span></div>
+            <div class="field"><label for="pc-event">Valid for</label><select id="pc-event" name="event_id"><option value="">All events</option></select></div>
+            <div class="field coupon-only hidden"><label for="pc-vname">Vendor name</label><input id="pc-vname" name="vendor_name" type="text" maxlength="120"></div>
+            <div class="field coupon-only hidden"><label for="pc-vphone">Vendor WhatsApp number *</label><input id="pc-vphone" name="vendor_phone" type="tel" placeholder="98765 43210"><span class="hint">Only a booking made with this number can use the coupon.</span></div>
+            <div class="field"><label for="pc-type">Discount type</label>
+              <select id="pc-type" name="discount_type"><option value="flat">Flat amount (₹)</option><option value="percent">Percentage (%)</option></select></div>
+            <div class="field"><label for="pc-value">Discount *</label><input id="pc-value" name="value" type="number" min="1" step="1" required placeholder="e.g. 500"></div>
+            <div class="field pct-only hidden"><label for="pc-max">Maximum discount (₹)</label><input id="pc-max" name="max_discount" type="number" min="1" step="1" placeholder="No cap"></div>
+            <div class="field"><label for="pc-limit">Usage limit</label><input id="pc-limit" name="usage_limit" type="number" min="1" step="1" placeholder="Unlimited"><span class="hint" id="pc-limit-hint">Number of bookings that can use it.</span></div>
+            <div class="field"><label for="pc-until">Valid until</label><input id="pc-until" name="valid_until" type="date"></div>
+            <div class="field"><label for="pc-note">Internal note</label><input id="pc-note" name="note" type="text" maxlength="200" placeholder="Optional, only you see this"></div>
+          </div>
+          <p class="muted small" style="margin-top:0">A vendor can use one promo code plus one personal coupon on a booking. The promo applies first, then the coupon on the remaining amount.</p>
+          <button class="btn primary" type="submit">Create code</button>
+        </form>
+        <h2>Your codes</h2>
+        <div class="list" id="promo-list"></div>
+      </section>
+
+      <section data-panel="members" class="hidden">
+        <form class="card" id="member-form" style="margin-bottom:20px">
+          <h2>Issue a membership card</h2>
+          <p class="muted small" style="margin-top:0">Creates a virtual card with a unique membership number, valid for 1 year from today. Share it with the vendor on WhatsApp.</p>
+          <div class="grid2">
+            <div class="field"><label for="m-name">Name on card *</label><input id="m-name" name="name" type="text" maxlength="80" required></div>
+            <div class="field"><label for="m-biz">Business name</label><input id="m-biz" name="business_name" type="text" maxlength="120"></div>
+            <div class="field"><label for="m-phone">WhatsApp number</label><input id="m-phone" name="phone" type="tel" placeholder="98765 43210"><span class="hint">Used to share the card.</span></div>
+          </div>
+          <button class="btn primary" type="submit">Issue card</button>
+        </form>
+        <h2>Members</h2>
+        <div class="list" id="member-list"></div>
       </section>
 
       <section data-panel="settings" class="hidden">

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Membership Card — Auto Expo Suburban Events</title>
+  <script>try{var t=localStorage.getItem('bms_theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+  <link rel="icon" type="image/png" href="/img/stall-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <header class="topbar" id="topbar"></header>
+  <main class="container section card-page">
+    <div id="card-box">
+      <div class="member-card-wrap"><canvas id="card" width="1012" height="638" role="img" aria-label="Membership card"></canvas></div>
+      <div class="row card-actions hidden" id="card-actions">
+        <button class="btn gold" id="dl">⬇ Download card</button>
+        <button class="btn wa" id="share">Share on WhatsApp</button>
+      </div>
+      <p class="muted small" id="card-note" style="text-align:center"></p>
+    </div>
+  </main>
+  <footer></footer>
+  <script type="module">
+    import { $, esc, header } from '/js/common.js';
+    header('');
+
+    const q = new URLSearchParams(location.search);
+    const no = q.get('n') || '', t = q.get('t') || '';
+    const cv = $('#card'), ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+    const fmt = ymd => new Date(ymd + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+    const loadImg = src => new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+
+    function gold(x0, y0, x1, y1) {
+      const g = ctx.createLinearGradient(x0, y0, x1, y1);
+      g.addColorStop(0, '#8a6a1f'); g.addColorStop(0.25, '#f3d98b'); g.addColorStop(0.5, '#c9a13b');
+      g.addColorStop(0.75, '#fbe7a1'); g.addColorStop(1, '#a37b26');
+      return g;
+    }
+    function rrect(x, y, w, h, r) {
+      ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    }
+    function fitText(text, font, size, maxW) {
+      do { ctx.font = `${font.replace('{s}', size)}`; size -= 2; } while (ctx.measureText(text).width > maxW && size > 14);
+    }
+
+    async function draw(m, qr) {
+      await document.fonts.ready;
+      const [logo, qrImg] = await Promise.all([loadImg('/img/stall-icon-t.png'), loadImg(qr)]);
+      // card body
+      ctx.clearRect(0, 0, W, H);
+      rrect(0, 0, W, H, 36); ctx.save(); ctx.clip();
+      const bg = ctx.createLinearGradient(0, 0, W, H);
+      bg.addColorStop(0, '#141414'); bg.addColorStop(0.55, '#050505'); bg.addColorStop(1, '#111');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+      // subtle gold sweep lines
+      ctx.globalAlpha = 0.07; ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 2;
+      for (let i = -H; i < W; i += 26) { ctx.beginPath(); ctx.moveTo(i, H); ctx.lineTo(i + H * 0.6, 0); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+      const glow = ctx.createRadialGradient(W * 0.85, H * 0.1, 10, W * 0.85, H * 0.1, W * 0.6);
+      glow.addColorStop(0, 'rgba(212,175,55,.18)'); glow.addColorStop(1, 'rgba(212,175,55,0)');
+      ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      // gold border
+      rrect(14, 14, W - 28, H - 28, 26); ctx.lineWidth = 3; ctx.strokeStyle = gold(0, 0, W, H); ctx.stroke();
+
+      // header
+      if (logo) ctx.drawImage(logo, 52, 46, 78, 78);
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = gold(150, 60, 700, 120);
+      fitText('AUTO EXPO SUBURBAN EVENTS', '700 {s}px Cinzel, Georgia, serif', 44, 640);
+      ctx.fillText('AUTO EXPO SUBURBAN EVENTS', 150, 98);
+      ctx.font = '600 18px Inter, Arial, sans-serif'; ctx.fillStyle = '#b8995a';
+      ctx.fillText('SINCE 2009  ·  CHENNAI', 152, 126);
+
+      ctx.fillStyle = gold(52, 170, 520, 210);
+      ctx.font = '700 30px Cinzel, Georgia, serif';
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '8px';
+      ctx.fillText('MEMBERSHIP CARD', 52, 200);
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+
+      // chip
+      const cx = 52, cy = 238;
+      rrect(cx, cy, 92, 68, 12); ctx.fillStyle = gold(cx, cy, cx + 92, cy + 68); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 2;
+      [[cx + 30, cy, cx + 30, cy + 68], [cx + 62, cy, cx + 62, cy + 68], [cx, cy + 34, cx + 30, cy + 34], [cx + 62, cy + 34, cx + 92, cy + 34]]
+        .forEach(([a, b, c, d]) => { ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(c, d); ctx.stroke(); });
+
+      // membership number
+      ctx.fillStyle = gold(52, 340, 700, 400);
+      ctx.font = '700 50px Inter, Arial, sans-serif';
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '5px';
+      ctx.fillText(m.member_no, 52, 386);
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+      ctx.font = '600 15px Inter, Arial, sans-serif'; ctx.fillStyle = '#8f7a4d';
+      ctx.fillText('MEMBERSHIP NUMBER', 54, 412);
+
+      // name
+      ctx.font = '600 15px Inter, Arial, sans-serif'; ctx.fillStyle = '#8f7a4d';
+      ctx.fillText('MEMBER NAME', 54, 470);
+      ctx.fillStyle = gold(52, 480, 640, 520);
+      fitText(m.name.toUpperCase(), '700 {s}px Cinzel, Georgia, serif', 38, 640);
+      ctx.fillText(m.name.toUpperCase(), 52, 512);
+      if (m.business_name) {
+        ctx.font = '500 20px Inter, Arial, sans-serif'; ctx.fillStyle = '#c9b27a';
+        fitText(m.business_name, '500 {s}px Inter, Arial, sans-serif', 20, 640);
+        ctx.fillText(m.business_name, 54, 542);
+      }
+
+      // dates
+      const dates = [['ISSUED ON', fmt(m.issued_on)], ['VALID TILL', fmt(m.expires_on)]];
+      dates.forEach(([k, v], i) => {
+        const x = 54 + i * 230;
+        ctx.font = '600 14px Inter, Arial, sans-serif'; ctx.fillStyle = '#8f7a4d'; ctx.fillText(k, x, 584);
+        ctx.font = '700 22px Inter, Arial, sans-serif'; ctx.fillStyle = gold(x, 590, x + 180, 610); ctx.fillText(v, x, 610);
+      });
+
+      // QR
+      const qx = W - 262, qy = 300, qs = 208;
+      rrect(qx - 12, qy - 12, qs + 24, qs + 24, 16); ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = gold(qx, qy, qx + qs, qy + qs); ctx.stroke();
+      if (qrImg) ctx.drawImage(qrImg, qx, qy, qs, qs);
+      ctx.font = '600 13px Inter, Arial, sans-serif'; ctx.fillStyle = '#8f7a4d'; ctx.textAlign = 'center';
+      ctx.fillText('SCAN TO VERIFY', qx + qs / 2, qy + qs + 40);
+      ctx.textAlign = 'left';
+
+      // status stamp
+      if (m.state !== 'active') {
+        ctx.save();
+        ctx.translate(W / 2, H / 2); ctx.rotate(-0.22);
+        ctx.font = '700 110px Inter, Arial, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(220,60,60,.85)'; ctx.fillStyle = 'rgba(220,60,60,.18)';
+        const word = m.state.toUpperCase();
+        ctx.fillText(word, 0, 0); ctx.strokeText(word, 0, 0);
+        ctx.restore();
+      }
+      cv.setAttribute('aria-label', `Auto Expo Suburban Events membership card for ${m.name}, number ${m.member_no}, issued ${fmt(m.issued_on)}, valid till ${fmt(m.expires_on)}. Status: ${m.state}.`);
+    }
+
+    try {
+      const r = await fetch(`/api/members/${encodeURIComponent(no)}?t=${encodeURIComponent(t)}`);
+      if (!r.ok) throw new Error();
+      const { member: m, qr, url } = await r.json();
+      document.title = `${m.name} — Membership Card`;
+      await draw(m, qr);
+      $('#card-actions').classList.remove('hidden');
+      const state = { active: `✓ Valid membership · expires ${fmt(m.expires_on)}`, expired: `This membership expired on ${fmt(m.expires_on)}. Contact the organizer to renew.`, revoked: 'This membership card has been revoked by the organizer.' }[m.state];
+      $('#card-note').innerHTML = `<span class="badge ${m.state === 'active' ? 'green' : 'red'}">${esc(state)}</span>`;
+      const file = `AES-Membership-${m.member_no}.png`;
+      $('#dl').addEventListener('click', () => {
+        const a = document.createElement('a'); a.download = file; a.href = cv.toDataURL('image/png'); a.click();
+      });
+      $('#share').addEventListener('click', async () => {
+        const text = `My Auto Expo Suburban Events membership card (${m.member_no}): ${url}`;
+        try {
+          const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+          const f = new File([blob], file, { type: 'image/png' });
+          if (navigator.canShare?.({ files: [f] })) return await navigator.share({ files: [f], text });
+        } catch (e) { if (e.name === 'AbortError') return; }
+        open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+      });
+    } catch {
+      $('#card-box').innerHTML = '<div class="card empty"><h2>Card not found</h2><p class="muted">This membership link is invalid. Please check with the organizer.</p></div>';
+    }
+  </script>
+</body>
+</html>
