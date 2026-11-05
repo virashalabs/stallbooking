@@ -82,8 +82,8 @@ code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
 .topbar { background: var(--topbar); color: #fff; position: sticky; top: 0; z-index: 50; box-shadow: 0 1px 0 rgba(255,255,255,.06); }
 .topbar .container { display: flex; align-items: center; gap: 16px; height: 62px; }
 .brand { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; min-width: 0; }
-.brand-mark { flex: none; width: 40px; height: 40px; border-radius: 10px; background: #fff; display: grid; place-items: center; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
-.brand-mark img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.18); }
+.brand-mark { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; box-shadow: 0 0 0 1px rgba(212,175,55,.45), 0 1px 6px rgba(0,0,0,.35); }
+.brand-mark img { width: 100%; height: 100%; object-fit: cover; }
 .brand-mark svg { width: 20px; height: 20px; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
 .brand-name { font-size: 1.02rem; font-weight: 800; letter-spacing: .6px; }
@@ -172,6 +172,8 @@ textarea { min-height: 84px; resize: vertical; }
 .slide.brand-slide::after { background: none; }
 .brand-slide .big { font-size: clamp(2rem, 5vw, 3.4rem); font-weight: 900; letter-spacing: 1px; line-height: 1.05; color: #fff; margin: 0 0 10px; }
 .brand-slide .since { display: inline-block; border: 2px solid var(--gold); color: var(--gold); padding: 4px 14px; border-radius: 99px; font-weight: 800; letter-spacing: 2px; margin-bottom: 14px; }
+.brand-slide .slide-logo { display: block; width: 96px; height: 96px; border-radius: 50%; margin-bottom: 14px; box-shadow: 0 0 0 2px rgba(212,175,55,.55), 0 8px 24px rgba(0,0,0,.45); }
+.brand-band { padding: 32px 0; }
 .brand-slide .logos { display: grid; grid-template-columns: repeat(3, 110px); gap: 10px; }
 .brand-slide .logos div { background: #fff; border-radius: 10px; height: 64px; display: flex; align-items: center; justify-content: center; padding: 8px; overflow: hidden; }
 .brand-slide .logos img { width: 100%; height: 100%; object-fit: contain; }
@@ -187,6 +189,7 @@ textarea { min-height: 84px; resize: vertical; }
   .slide-poster { width: min(240px, 70vw); }
   .slide-info .meta, .slide-info .chips { align-items: center; justify-content: center; }
   .brand-slide .logos { grid-template-columns: repeat(3, 84px); justify-content: center; }
+  .brand-slide .slide-logo { margin: 0 auto 12px; width: 80px; height: 80px; }
   .car-arrow { display: none; }
   .slide::after { background: linear-gradient(180deg, rgba(8,14,28,.35), rgba(8,14,28,.85)); }
 }
@@ -235,6 +238,13 @@ textarea { min-height: 84px; resize: vertical; }
 .page-hero h1 { color: #fff; margin-bottom: 6px; }
 .page-hero p { color: #d5e0f2; max-width: 680px; margin: 0; font-size: 1.05rem; }
 .page-hero .since { display: inline-block; border: 2px solid var(--gold); color: var(--gold); padding: 3px 12px; border-radius: 99px; font-weight: 800; letter-spacing: 2px; font-size: .8rem; margin-bottom: 12px; }
+.hero-brand { display: flex; align-items: center; gap: 28px; }
+.hero-logo { flex: none; width: 132px; height: 132px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(212,175,55,.55), 0 8px 28px rgba(0,0,0,.4); }
+.hero-brand .since { margin: 2px 0 12px; }
+@media (max-width: 640px) {
+  .hero-brand { gap: 16px; align-items: flex-start; }
+  .hero-logo { width: 84px; height: 84px; }
+}
 .about-split { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: start; }
 @media (max-width: 860px) { .about-split { grid-template-columns: 1fr; } }
 .ticks { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-direction: column; gap: 10px; }

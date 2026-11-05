@@ -87,7 +87,7 @@ export const STATUS = {
 export const statusBadge = s => `<span class="badge ${STATUS[s]?.[1] || ''}">${esc(STATUS[s]?.[0] || s)}</span>`;
 
 export const STALL_ICON = `<img class="sicon" src="/img/stall-icon-t.png" alt="" aria-hidden="true">`;
-export const BRAND_SVG = `<img src="/img/stall-icon.png" alt="" width="40" height="40">`;
+export const BRAND_SVG = `<img src="/img/aes-logo-96.png" alt="" width="44" height="44">`;
 
 export const BRAND_TEXT = `<span class="brand-text"><span class="brand-name">AUTO EXPO SUBURBAN EVENTS</span><span class="brand-sub">Since 2009</span></span>`;
 

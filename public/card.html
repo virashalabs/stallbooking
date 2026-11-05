@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Membership Card — Auto Expo Suburban Events</title>
   <script>try{var t=localStorage.getItem('bms_theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
-  <link rel="icon" type="image/png" href="/img/stall-icon.png">
+  <link rel="icon" type="image/png" href="/img/favicon.png">
+  <link rel="apple-touch-icon" href="/img/aes-logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@500;600;700&display=swap" rel="stylesheet">
@@ -51,7 +52,7 @@
 
     async function draw(m, qr) {
       await document.fonts.ready;
-      const [logo, qrImg] = await Promise.all([loadImg('/img/stall-icon-t.png'), loadImg(qr)]);
+      const [logo, qrImg] = await Promise.all([loadImg('/img/aes-logo.png'), loadImg(qr)]);
       // card body
       ctx.clearRect(0, 0, W, H);
       rrect(0, 0, W, H, 36); ctx.save(); ctx.clip();

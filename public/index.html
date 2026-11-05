@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Auto Expo Suburban Events — Book stalls at upcoming events</title>
   <script>try{var t=localStorage.getItem('bms_theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
-  <link rel="icon" type="image/png" href="/img/stall-icon.png">
+  <link rel="icon" type="image/png" href="/img/favicon.png">
+  <link rel="apple-touch-icon" href="/img/aes-logo.png">
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -17,6 +18,18 @@
       <button class="car-arrow prev" id="prev" aria-label="Previous banner">‹</button>
       <button class="car-arrow next" id="next" aria-label="Next banner">›</button>
       <div class="dots" id="dots"></div>
+    </section>
+
+    <!-- Brand band (always visible) -->
+    <section class="page-hero brand-band">
+      <div class="container hero-brand">
+        <img class="hero-logo" src="/img/aes-logo.png" alt="Auto Expo Suburban Events (AES) logo" width="132" height="132">
+        <div>
+          <h1>AUTO EXPO SUBURBAN EVENTS</h1>
+          <span class="since">SINCE 2009</span>
+          <p>Chennai's Premier Corporate Event Planner — book your stall at our upcoming events below.</p>
+        </div>
+      </div>
     </section>
 
     <!-- Upcoming events -->
@@ -83,8 +96,9 @@
     slides.push(`<a class="slide brand-slide" href="/about.html">
       <div class="container slide-inner">
         <div class="slide-info">
-          <span class="since">SINCE 2009</span>
+          <img class="slide-logo" src="/img/aes-logo.png" alt="" width="96" height="96">
           <p class="big">AUTO EXPO<br>SUBURBAN EVENTS</p>
+          <span class="since">SINCE 2009</span>
           <div class="meta"><span>Chennai's Premier Corporate Event Planner</span><span style="font-weight:500">Automotive events, BTL activations &amp; stall bookings at top corporate campuses.</span></div>
           <span class="btn primary">About us →</span>
         </div>
