@@ -89,8 +89,15 @@ code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
 .brand-name { font-size: 1.02rem; font-weight: 800; letter-spacing: .6px; }
 .brand-sub { font-size: .72rem; font-weight: 600; color: var(--gold); letter-spacing: .8px; text-transform: uppercase; margin-top: 2px; }
 .topbar nav { margin-left: auto; display: flex; gap: 4px; align-items: center; }
-.topbar nav a, .topbar nav button { color: #dfe7f5; text-decoration: none; padding: 8px 12px; border-radius: 8px; font-weight: 600; font-size: .92rem; background: none; border: 0; cursor: pointer; font-family: inherit; white-space: nowrap; }
-.topbar nav a:hover, .topbar nav button:hover, .topbar nav .active { background: rgba(255,255,255,.12); color: #fff; }
+.topbar nav a, .topbar nav button { position: relative; color: #dfe7f5; text-decoration: none; padding: 8px 12px; border-radius: 8px; font-weight: 600; font-size: .92rem; background: none; border: 0; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background .18s, color .18s, transform .12s, box-shadow .18s; }
+.topbar nav .nav-link::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 3px; height: 2px; border-radius: 2px; background: var(--gold); transform: scaleX(0); transform-origin: center; transition: transform .22s ease; }
+.topbar nav a:hover, .topbar nav button:hover { background: rgba(255,255,255,.14); color: #fff; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.25); }
+.topbar nav .nav-link:hover::after, .topbar nav .nav-link:focus-visible::after, .topbar nav .active::after { transform: scaleX(1); }
+.topbar nav .active { color: var(--gold); background: rgba(212,175,55,.12); }
+.topbar nav a:active, .topbar nav button:active { transform: translateY(0) scale(.96); box-shadow: none; }
+.topbar nav a:focus-visible, .topbar nav button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.brand { transition: opacity .18s; } .brand:hover .brand-mark { transform: rotate(-8deg) scale(1.06); }
+.brand-mark { transition: transform .25s ease; }
 .theme-btn { display: grid; place-items: center; width: 38px; height: 38px; padding: 0 !important; }
 .theme-btn svg { width: 19px; height: 19px; }
 .menu-btn { display: none; }
@@ -172,8 +179,11 @@ textarea { min-height: 84px; resize: vertical; }
 .slide.brand-slide::after { background: none; }
 .brand-slide .big { font-size: clamp(2rem, 5vw, 3.4rem); font-weight: 900; letter-spacing: 1px; line-height: 1.05; color: #fff; margin: 0 0 10px; }
 .brand-slide .since { display: inline-block; border: 2px solid var(--gold); color: var(--gold); padding: 4px 14px; border-radius: 99px; font-weight: 800; letter-spacing: 2px; margin-bottom: 14px; }
-.brand-slide .slide-logo { display: block; width: 96px; height: 96px; border-radius: 50%; margin-bottom: 14px; box-shadow: 0 0 0 2px rgba(212,175,55,.55), 0 8px 24px rgba(0,0,0,.45); }
-.brand-band { padding: 32px 0; }
+.brand-slide .slide-logo { display: block; width: 140px; height: 140px; border-radius: 50%; margin-bottom: 14px; box-shadow: 0 0 0 2px rgba(212,175,55,.55), 0 8px 24px rgba(0,0,0,.45); }
+.brand-band { padding: 36px 0; }
+.brand-band .hero-logo { width: 200px; height: 200px; transition: transform .3s ease; }
+.brand-band .hero-logo:hover { transform: scale(1.04) rotate(-3deg); }
+@media (max-width: 640px) { .brand-band .hero-logo { width: 120px; height: 120px; } .brand-band .hero-brand { flex-direction: column; align-items: center; text-align: center; } }
 .brand-slide .logos { display: grid; grid-template-columns: repeat(3, 110px); gap: 10px; }
 .brand-slide .logos div { background: #fff; border-radius: 10px; height: 64px; display: flex; align-items: center; justify-content: center; padding: 8px; overflow: hidden; }
 .brand-slide .logos img { width: 100%; height: 100%; object-fit: contain; }
@@ -189,7 +199,7 @@ textarea { min-height: 84px; resize: vertical; }
   .slide-poster { width: min(240px, 70vw); }
   .slide-info .meta, .slide-info .chips { align-items: center; justify-content: center; }
   .brand-slide .logos { grid-template-columns: repeat(3, 84px); justify-content: center; }
-  .brand-slide .slide-logo { margin: 0 auto 12px; width: 80px; height: 80px; }
+  .brand-slide .slide-logo { margin: 0 auto 12px; width: 104px; height: 104px; }
   .car-arrow { display: none; }
   .slide::after { background: linear-gradient(180deg, rgba(8,14,28,.35), rgba(8,14,28,.85)); }
 }
