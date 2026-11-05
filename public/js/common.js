@@ -121,8 +121,14 @@ export function wireThemeToggle(btn) {
 export function header(active = '') {
   const el = document.getElementById('topbar');
   if (!el) return;
+  const hero = el.classList.contains('hero-top');
+  const brand = hero
+    ? `<a class="brand hero-brand" href="/"><img class="hero-logo" src="/img/aes-logo.png" alt="Auto Expo Suburban Events (AES) logo" width="170" height="170">
+        <span class="hero-text"><span class="hero-name">AUTO EXPO SUBURBAN EVENTS</span><span class="since">SINCE 2009</span>
+        <span class="hero-tag">Chennai's Premier Corporate Event Planner — expertise in automotive events and corporate functions.</span></span></a>`
+    : `<a class="brand" href="/"><span class="brand-mark">${BRAND_SVG}</span>${BRAND_TEXT}</a>`;
   el.innerHTML = `<div class="container">
-    <a class="brand" href="/"><span class="brand-mark">${BRAND_SVG}</span>${BRAND_TEXT}</a>
+    ${brand}
     <nav id="main-nav">
       <a class="nav-link ${active === 'events' ? 'active' : ''}" href="/#events">Events</a>
       <a class="nav-link ${active === 'about' ? 'active' : ''}" href="/about.html">About Us</a>
