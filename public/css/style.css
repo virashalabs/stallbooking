@@ -407,6 +407,15 @@ textarea { min-height: 84px; resize: vertical; }
 .stage.edit .stall.sel { box-shadow: 0 0 0 3px var(--blue); border-color: var(--blue); z-index: 2; }
 .stage.edit .stall .rz { position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; background: var(--blue); cursor: nwse-resize; border-top-left-radius: 4px; }
 .stage.adding { cursor: crosshair; }
+.stage.boxing { touch-action: none; }
+.stage.boxing .stall { pointer-events: none; opacity: .6; }
+.gen-box { position: absolute; border: 2px dashed var(--blue); background: rgba(37,99,235,.08); border-radius: 4px; pointer-events: none; z-index: 3; }
+.stall.ghost { border-style: dashed; border-color: var(--blue); background: rgba(37,99,235,.18); pointer-events: none; z-index: 4; }
+.stall.ghost.clash { border-color: var(--red); background: rgba(220,38,38,.2); }
+.btn.on { background: rgba(37,99,235,.12); border-color: var(--blue); color: var(--blue); }
+.copy-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow: auto; }
+.copy-item { text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: inherit; font: inherit; cursor: pointer; transition: border-color .15s, background .15s; }
+.copy-item:hover { border-color: var(--blue); background: rgba(37,99,235,.06); }
 
 .bell { position: relative; }
 .bell .dot { position: absolute; top: 2px; right: 2px; background: var(--red); color: #fff; border-radius: 99px; font-size: .68rem; min-width: 17px; height: 17px; display: grid; place-items: center; padding: 0 4px; }

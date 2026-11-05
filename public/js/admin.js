@@ -243,6 +243,8 @@ async function loadEvents() {
 // ------------------------------------------------------------------ event editor
 let editingId = null;
 let edEvent = null, edStalls = [], selIdx = -1, adding = false, dirty = false;
+// side-panel tools: null | 'box' (drawing a box) | 'grid' (box drawn, choosing rows x columns) | 'copy' | 'relayout'
+let tool = null, gridBox = null, gridOpt = null;
 
 function closeEditor() {
   $('#event-editor').classList.add('hidden');
@@ -264,7 +266,7 @@ $('#f-banner').addEventListener('change', e => { const f = e.target.files[0]; if
 $('#f-layout').addEventListener('change', e => { const f = e.target.files[0]; if (f) { $('#layout-prev').src = URL.createObjectURL(f); $('#layout-prev').classList.remove('hidden'); } });
 
 async function openEditor(id) {
-  editingId = id; dirty = false; selIdx = -1; adding = false;
+  editingId = id; dirty = false; selIdx = -1; adding = false; tool = null; gridBox = null;
   $('#events-list-view').classList.add('hidden');
   $('#event-editor').classList.remove('hidden');
   const form = $('#event-form');
@@ -303,11 +305,15 @@ $('#event-form').addEventListener('submit', async e => {
   const btn = $('#save-event'); btn.disabled = true;
   try {
     if (editingId) {
+      const newLayout = fd.has('layout') && edStalls.length > 0;
       await api(`/api/admin/events/${editingId}`, { method: 'PUT', form: fd });
       toast('Event saved', 'ok');
       const keepStalls = dirty ? edStalls : null;
       await openEditor(editingId);
-      if (keepStalls) { edStalls = keepStalls; dirty = true; drawEditor(); }
+      if (keepStalls) { edStalls = keepStalls; dirty = true; }
+      if (newLayout) { tool = 'relayout'; selIdx = -1; }
+      drawEditor();
+      if (newLayout) $('#stall-editor').scrollIntoView({ behavior: 'smooth' });
     } else {
       const r = await api('/api/admin/events', { method: 'POST', form: fd });
       toast('Event posted! Now add the stalls.', 'ok');
@@ -336,10 +342,13 @@ function priceOf(s) {
   return base + (s.is_corner ? edEvent.corner_charge : 0);
 }
 
-function drawEditor() {
+function drawEditor({ panel = true } = {}) {
   stage.innerHTML = '';
   stage.classList.toggle('blank', !edEvent.layout);
-  stage.classList.toggle('adding', adding);
+  stage.classList.toggle('adding', adding || tool === 'box');
+  stage.classList.toggle('boxing', tool === 'box');
+  $('#gen-stalls').classList.toggle('on', tool === 'box' || tool === 'grid');
+  $('#copy-stalls').classList.toggle('on', tool === 'copy');
   $('#add-stall').textContent = adding ? 'Click on layout… (Esc to stop)' : '+ Add stall';
   if (edEvent.layout) {
     const img = document.createElement('img');
@@ -356,14 +365,28 @@ function drawEditor() {
     el.addEventListener('pointerdown', ev => startDrag(ev, i, ev.target.classList.contains('rz')));
     stage.append(el);
   });
+  if (gridBox && (tool === 'box' || tool === 'grid')) {
+    const b = document.createElement('div');
+    b.className = 'gen-box';
+    Object.assign(b.style, { left: gridBox.x + '%', top: gridBox.y + '%', width: gridBox.w + '%', height: gridBox.h + '%' });
+    stage.append(b);
+  }
+  if (tool === 'grid') gridStalls().forEach(g => {
+    const el = document.createElement('div');
+    el.className = `stall ghost${g.is_corner ? ' corner' : ''}${labelTaken(g.label) ? ' clash' : ''}`;
+    Object.assign(el.style, { left: g.x + '%', top: g.y + '%', width: g.w + '%', height: g.h + '%' });
+    el.innerHTML = `<span class="lbl">${esc(g.label)}</span>`;
+    stage.append(el);
+  });
   const corners = edStalls.filter(s => s.is_corner).length;
   $('#stall-info').textContent = `${edStalls.length} stalls · ${corners} corner${dirty ? ' · unsaved changes' : ''}`;
   $('#save-stalls').textContent = dirty ? 'Save stalls •' : 'Save stalls';
-  drawPanel();
+  if (panel) drawPanel();
 }
 
 function drawPanel() {
   const p = $('#ed-panel');
+  if (tool) return drawToolPanel(p);
   const s = edStalls[selIdx];
   if (!s) {
     p.innerHTML = `<h3>Stall details</h3><p class="muted small">Select a stall to edit it.</p>
@@ -432,6 +455,7 @@ function startDrag(ev, i, resize) {
 }
 
 stage.addEventListener('pointerdown', e => {
+  if (tool === 'box') return startBox(e);
   if (e.target.closest('.stall')) return;
   if (!adding) { selIdx = -1; drawEditor(); return; }
   const rect = stage.getBoundingClientRect();
@@ -443,7 +467,7 @@ stage.addEventListener('pointerdown', e => {
   selIdx = edStalls.length - 1; dirty = true;
   drawEditor();
 });
-$('#add-stall').addEventListener('click', () => { adding = !adding; drawEditor(); });
+$('#add-stall').addEventListener('click', () => { adding = !adding; if (adding) { tool = null; gridBox = null; } drawEditor(); });
 document.addEventListener('keydown', e => {
   if ($('#stall-editor').classList.contains('hidden') || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
   if (e.key === 'Escape' && adding) { adding = false; drawEditor(); }
@@ -455,22 +479,161 @@ document.addEventListener('keydown', e => {
   if (d) { e.preventDefault(); s.x = Math.max(0, Math.min(100 - s.w, s.x + d[0])); s.y = Math.max(0, Math.min(100 - s.h, s.y + d[1])); dirty = true; drawEditor(); }
 });
 
-$('#gen-stalls').addEventListener('click', () => {
-  const n = parseInt(prompt('How many stalls should be generated in a grid?' + (edStalls.length ? '\n(They will be added to the existing stalls.)' : ''), '12'), 10);
-  if (!n || n < 1 || n > 300) return;
-  const cols = Math.min(n, 10), rows = Math.ceil(n / cols);
-  const gap = 1.2, cw = (96 - gap * (cols - 1)) / cols, rh = Math.min(26, (92 - gap * (rows - 1)) / rows);
-  let lbl = Number(nextLabel()) || edStalls.length + 1;
-  for (let i = 0; i < n; i++) {
-    const r = Math.floor(i / cols), c = i % cols;
-    const lastInRow = Math.min(cols, n - r * cols) - 1;
-    edStalls.push({
-      label: String(lbl++), is_corner: c === 0 || c === lastInRow, custom_price: null,
-      x: 2 + c * (cw + gap), y: 4 + r * (rh + gap), w: cw, h: rh, blocked: false, state: 'available',
-    });
+// ----- faster setup: generate a grid inside a box, copy from another event, re-layout prompt
+const pct = (e, rect) => ({
+  x: Math.max(0, Math.min(100, (e.clientX - rect.left) / rect.width * 100)),
+  y: Math.max(0, Math.min(100, (e.clientY - rect.top) / rect.height * 100)),
+});
+function startBox(e) {
+  e.preventDefault();
+  const rect = stage.getBoundingClientRect();
+  const a = pct(e, rect);
+  gridBox = { x: a.x, y: a.y, w: 0, h: 0 };
+  const move = ev => {
+    const b = pct(ev, rect);
+    gridBox = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
+    drawEditor({ panel: false });
+  };
+  const up = () => {
+    window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+    if (gridBox.w < 2 || gridBox.h < 2) { gridBox = null; drawEditor({ panel: false }); toast('Drag a bigger box over the stall area.'); return; }
+    if (!gridOpt) gridOpt = { rows: 1, cols: 10, gap: 0.6, prefix: '', start: 1, corners: true };
+    gridOpt.start = Number(nextLabel()) || edStalls.length + 1;
+    tool = 'grid'; drawEditor();
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+}
+function gridStalls() {
+  if (!gridBox || !gridOpt) return [];
+  const { rows, cols, prefix, start, corners } = gridOpt;
+  const gap = Math.max(0, Math.min(gridOpt.gap, gridBox.w / cols / 2, gridBox.h / rows / 2));
+  const cw = (gridBox.w - gap * (cols - 1)) / cols, rh = (gridBox.h - gap * (rows - 1)) / rows;
+  const out = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const end = cols > 1 ? (c === 0 || c === cols - 1) : (r === 0 || r === rows - 1);
+    out.push({ label: `${prefix}${start + out.length}`, is_corner: corners && end, custom_price: null,
+      x: gridBox.x + c * (cw + gap), y: gridBox.y + r * (rh + gap), w: cw, h: rh, blocked: false, state: 'available' });
   }
-  dirty = true; drawEditor();
-  toast(`${n} stalls added — row ends are marked as corner stalls. Adjust as needed.`);
+  return out;
+}
+const labelTaken = l => edStalls.some(s => String(s.label).toLowerCase() === String(l).toLowerCase());
+const endTool = () => { tool = null; gridBox = null; drawEditor(); };
+
+function drawToolPanel(p) {
+  const cancel = `<button class="btn ghost sm block" id="t-cancel" style="margin-top:8px">Cancel</button>`;
+  const wireCancel = () => $('#t-cancel')?.addEventListener('click', endTool);
+
+  if (tool === 'box') {
+    p.innerHTML = `<h3>Generate stalls</h3>
+      <p class="small"><b>Drag a box</b> on the layout over a row (or block) of stalls.</p>
+      <p class="muted small">Then choose how many rows and columns fit inside it — the stalls are spaced evenly in the box. Repeat for each row of the venue.</p>${cancel}`;
+    return wireCancel();
+  }
+
+  if (tool === 'grid') {
+    const g = gridOpt;
+    p.innerHTML = `<h3>Generate stalls</h3>
+      <div class="grid2" style="grid-template-columns:1fr 1fr">
+        <div class="field"><label for="g-rows">Rows</label><input id="g-rows" type="number" min="1" max="30" value="${g.rows}"></div>
+        <div class="field"><label for="g-cols">Columns</label><input id="g-cols" type="number" min="1" max="60" value="${g.cols}"></div>
+        <div class="field"><label for="g-prefix">Label prefix</label><input id="g-prefix" type="text" maxlength="6" placeholder="e.g. A" value="${esc(g.prefix)}"></div>
+        <div class="field"><label for="g-start">First number</label><input id="g-start" type="number" min="0" value="${g.start}"></div>
+      </div>
+      <div class="field"><label for="g-gap">Gap between stalls</label><input id="g-gap" type="range" min="0" max="3" step="0.1" value="${g.gap}"></div>
+      <label class="check" style="margin-bottom:10px"><input type="checkbox" id="g-corners" ${g.corners ? 'checked' : ''}> ★ Mark row ends as corner stalls</label>
+      <p class="small" id="g-sum"></p>
+      <button class="btn green sm block" id="g-add">Add stalls</button>
+      <button class="btn ghost sm block" id="g-redraw" style="margin-top:8px">Redraw box</button>${cancel}`;
+    const sum = () => {
+      const l = gridStalls(), c = l.filter(x => labelTaken(x.label)).length;
+      $('#g-sum').innerHTML = `<b>${l.length}</b> stalls: ${esc(l[0]?.label ?? '')} – ${esc(l[l.length - 1]?.label ?? '')}` +
+        (c ? `<br><span style="color:var(--red)">${c} label${c > 1 ? 's are' : ' is'} already used — change the prefix or first number.</span>` : '');
+      $('#g-add').disabled = !!c;
+    };
+    const num = (id, lo, hi, def) => Math.max(lo, Math.min(hi, parseInt($(id).value, 10) || def));
+    const read = () => {
+      gridOpt = { rows: num('#g-rows', 1, 30, 1), cols: num('#g-cols', 1, 60, 1), gap: +$('#g-gap').value,
+        prefix: $('#g-prefix').value.trim(), start: Math.max(0, parseInt($('#g-start').value, 10) || 0), corners: $('#g-corners').checked };
+      drawEditor({ panel: false }); sum();
+    };
+    $$('input', p).forEach(i => i.addEventListener('input', read));
+    sum();
+    $('#g-add').addEventListener('click', () => {
+      const l = gridStalls();
+      edStalls.push(...l); dirty = true; selIdx = -1;
+      endTool();
+      toast(`${l.length} stalls added. Drag any that need adjusting, then Save stalls.`, 'ok');
+    });
+    $('#g-redraw').addEventListener('click', () => { tool = 'box'; gridBox = null; drawEditor(); });
+    return wireCancel();
+  }
+
+  if (tool === 'copy') {
+    p.innerHTML = `<h3>Copy stalls from…</h3><p class="muted small">Loading events…</p>${cancel}`;
+    wireCancel();
+    api('/api/admin/events').then(list => {
+      if (tool !== 'copy') return;
+      const others = list.filter(e => e.id !== editingId && e.stall_count > 0);
+      p.innerHTML = `<h3>Copy stalls from…</h3>
+        <p class="muted small">Copies positions, sizes, labels, corner marks and prices. Bookings are not copied. Works best when both events use the same layout image.</p>
+        ${others.length ? `<div class="copy-list">${others.map(e => `<button type="button" class="copy-item" data-id="${e.id}"><b>${esc(e.title)}</b><span class="muted small">${esc(e.venue || '')} · ${e.stall_count} stalls</span></button>`).join('')}</div>`
+          : '<p class="small">No other event has stalls yet.</p>'}
+        ${edStalls.length ? `<label class="check small" style="margin:10px 0"><input type="checkbox" id="c-replace" checked> Replace the ${edStalls.length} current stalls</label>` : ''}${cancel}`;
+      $$('.copy-item', p).forEach(b => b.addEventListener('click', () => copyFrom(Number(b.dataset.id))));
+      wireCancel();
+    }).catch(err => toast(err.message, 'error'));
+    return;
+  }
+
+  if (tool === 'relayout') {
+    const booked = edStalls.filter(s => s.booking).length;
+    p.innerHTML = `<h3>New layout uploaded</h3>
+      <p class="small">Your <b>${edStalls.length}</b> stalls are still in their old positions and may not line up with the new image.</p>
+      <button class="btn primary sm block" id="r-box">Clear &amp; generate in a box</button>
+      <button class="btn ghost sm block" id="r-clear" style="margin-top:8px">Clear stalls &amp; start fresh</button>
+      <button class="btn ghost sm block" id="r-keep" style="margin-top:8px">Keep them — I'll drag them into place</button>
+      ${booked ? `<p class="muted small" style="margin-top:10px">${booked} stall${booked > 1 ? 's have' : ' has'} a booking and will be kept.</p>` : ''}`;
+    const clear = () => {
+      const before = edStalls.length;
+      edStalls = edStalls.filter(s => s.booking);
+      if (edStalls.length !== before) dirty = true;
+      selIdx = -1;
+    };
+    $('#r-clear').addEventListener('click', () => { clear(); endTool(); toast('Stalls cleared — add new ones, then Save stalls.'); });
+    $('#r-box').addEventListener('click', () => { clear(); tool = 'box'; gridBox = null; drawEditor(); });
+    $('#r-keep').addEventListener('click', endTool);
+  }
+}
+
+async function copyFrom(id) {
+  try {
+    const d = await api(`/api/admin/events/${id}`);
+    const replace = $('#c-replace') ? $('#c-replace').checked : true;
+    const kept = replace ? edStalls.filter(s => s.booking) : edStalls;
+    const copies = d.stalls.map(s => ({ label: String(s.label), is_corner: !!s.is_corner, custom_price: s.custom_price ?? null,
+      x: +s.x, y: +s.y, w: +s.w, h: +s.h, blocked: !!s.blocked, state: 'available' }));
+    const used = new Set(kept.map(s => String(s.label).toLowerCase()));
+    let n = 1, renamed = 0;
+    for (const c of copies) {
+      if (used.has(c.label.toLowerCase())) { while (used.has(String(n))) n++; c.label = String(n); renamed++; }
+      used.add(c.label.toLowerCase());
+    }
+    edStalls = [...kept, ...copies]; dirty = true; selIdx = -1;
+    endTool();
+    toast(`${copies.length} stalls copied from "${d.event.title}"${renamed ? ` (${renamed} renamed to avoid duplicate labels)` : ''}. Save stalls to keep them.`, 'ok');
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+$('#gen-stalls').addEventListener('click', () => {
+  adding = false; selIdx = -1; gridBox = null;
+  tool = tool === 'box' || tool === 'grid' ? null : 'box';
+  drawEditor();
+});
+$('#copy-stalls').addEventListener('click', () => { adding = false; selIdx = -1; gridBox = null; tool = tool === 'copy' ? null : 'copy'; drawEditor(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && ['box', 'grid', 'copy'].includes(tool) && !$('#stall-editor').classList.contains('hidden')
+    && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) endTool();
 });
 
 $('#save-stalls').addEventListener('click', async () => {
