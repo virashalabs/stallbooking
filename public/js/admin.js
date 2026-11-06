@@ -1,3 +1,4 @@
+import { detectStallsFromUrl } from '/js/detect-stalls.js';
 import { $, $$, api, esc, money, fmtRange, ago, toast, statusBadge, BRAND_SVG, VENUE_TYPES, wireThemeToggle } from '/js/common.js';
 wireThemeToggle(document.getElementById('theme-btn'));
 
@@ -316,7 +317,7 @@ $('#event-form').addEventListener('submit', async e => {
       if (newLayout) $('#stall-editor').scrollIntoView({ behavior: 'smooth' });
     } else {
       const r = await api('/api/admin/events', { method: 'POST', form: fd });
-      toast('Event posted! Now add the stalls.', 'ok');
+      toast(fd.has('layout') ? 'Event posted! Click "✨ Detect all stalls" to add the stalls from your layout.' : 'Event posted! Now add the stalls.', 'ok');
       await openEditor(r.id);
       $('#stall-editor').scrollIntoView({ behavior: 'smooth' });
     }
@@ -590,7 +591,8 @@ function drawToolPanel(p) {
     const booked = edStalls.filter(s => s.booking).length;
     p.innerHTML = `<h3>New layout uploaded</h3>
       <p class="small">Your <b>${edStalls.length}</b> stalls are still in their old positions and may not line up with the new image.</p>
-      <button class="btn primary sm block" id="r-box">Clear &amp; generate in a box</button>
+      <button class="btn primary sm block" id="r-detect">✨ Detect stalls on new layout</button>
+      <button class="btn ghost sm block" id="r-box" style="margin-top:8px">Clear &amp; generate in a box</button>
       <button class="btn ghost sm block" id="r-clear" style="margin-top:8px">Clear stalls &amp; start fresh</button>
       <button class="btn ghost sm block" id="r-keep" style="margin-top:8px">Keep them — I'll drag them into place</button>
       ${booked ? `<p class="muted small" style="margin-top:10px">${booked} stall${booked > 1 ? 's have' : ' has'} a booking and will be kept.</p>` : ''}`;
@@ -603,6 +605,7 @@ function drawToolPanel(p) {
     $('#r-clear').addEventListener('click', () => { clear(); endTool(); toast('Stalls cleared — add new ones, then Save stalls.'); });
     $('#r-box').addEventListener('click', () => { clear(); tool = 'box'; gridBox = null; drawEditor(); });
     $('#r-keep').addEventListener('click', endTool);
+    $('#r-detect').addEventListener('click', () => { endTool(); detectAll(); });
   }
 }
 
@@ -624,6 +627,33 @@ async function copyFrom(id) {
     toast(`${copies.length} stalls copied from "${d.event.title}"${renamed ? ` (${renamed} renamed to avoid duplicate labels)` : ''}. Save stalls to keep them.`, 'ok');
   } catch (err) { toast(err.message, 'error'); }
 }
+
+// one click: find every stall drawn on the layout image
+async function detectAll() {
+  if (!edEvent?.layout) return toast('Upload a layout image first (in the event form above), then detect stalls.', 'error');
+  const kept = edStalls.filter(s => s.booking);
+  const removable = edStalls.length - kept.length;
+  if (removable && !confirm(`Replace the ${removable} current stall${removable > 1 ? 's' : ''} with the stalls detected on the layout?${kept.length ? ` (${kept.length} booked stall${kept.length > 1 ? 's' : ''} will be kept.)` : ''}`)) return;
+  const btn = $('#detect-stalls');
+  btn.disabled = true; btn.textContent = 'Detecting…';
+  try {
+    const found = await detectStallsFromUrl(edEvent.layout);
+    if (!found.length) return toast('Could not find stall boxes on this layout. Use "Generate in a box" instead.', 'error');
+    const used = new Set(kept.map(s => String(s.label).toLowerCase()));
+    let n = 1;
+    const fresh = found.map(f => {
+      while (used.has(String(n))) n++;
+      used.add(String(n));
+      return { label: String(n++), is_corner: f.is_corner, custom_price: null, x: f.x, y: f.y, w: f.w, h: f.h, blocked: false, state: 'available' };
+    });
+    edStalls = [...kept, ...fresh]; dirty = true; selIdx = -1; adding = false; tool = null; gridBox = null;
+    drawEditor();
+    const corners = fresh.filter(s => s.is_corner).length;
+    toast(`Found ${fresh.length} stalls (${corners} ★ corner). Click a stall to change corner/label/price, then Save stalls.`, 'ok');
+  } catch (err) { toast('Could not read the layout image: ' + err.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '✨ Detect all stalls'; }
+}
+$('#detect-stalls').addEventListener('click', detectAll);
 
 $('#gen-stalls').addEventListener('click', () => {
   adding = false; selIdx = -1; gridBox = null;
